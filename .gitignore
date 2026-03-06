@@ -1,0 +1,14 @@
+**/.idea/
+**/.vscode/
+**/.pytest_cache/
+**/__pycache__/
+**/.pytest_cache/
+**/.venv/
+**/.DS_Store
+**/*.pyc
+**/.env
+
+src/legacy/**
+CAPTCHA/**
+output/**
+docs/**
