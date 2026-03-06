@@ -10,11 +10,9 @@ set -euo pipefail
 #   -b BUDDIES     覆盖 CGYY_BUDDY_IDS，逗号分隔
 #   其他参数将原样透传给 python -m src.main。
 #
-# Candidate time configuration (highest priority first):
+# Candidate time configuration:
 #   1) -p PATTERN                  # explicit pairs HH:MM/DURATION,...
-#   2) CGYY_RESERVE_OPTIONS        # same format as -p
-#   3) CGYY_RESERVE_START_TIMES / CGYY_RESERVE_DURATIONS
-#   4) 若以上均未设置，则不覆盖 CGYY_RESERVATION_*，由 Python 根据 .env 自己决定
+#   2) 若未指定 -p，则不覆盖开始时间/时段数，由 Python 根据 .env 自己决定
 #
 # Exit code:
 #   0 if any attempt prints "✅ [成功] 提交订单"
@@ -25,8 +23,6 @@ cd "$repo_root"
 
 date_arg=""
 pattern_arg=""
-venue_override=""
-buddy_override=""
 pass_args=()
 
 while [[ $# -gt 0 ]]; do
@@ -41,11 +37,11 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     -v)
-      venue_override="$2"
+      pass_args+=("-v" "$2")
       shift 2
       ;;
     -b)
-      buddy_override="$2"
+      pass_args+=("-b" "$2")
       shift 2
       ;;
     *)
@@ -64,13 +60,6 @@ if [[ -z "$python_bin" ]]; then
   fi
 fi
 
-if [[ -n "$venue_override" ]]; then
-  export CGYY_VENUE_SITE_ID="$venue_override"
-fi
-if [[ -n "$buddy_override" ]]; then
-  export CGYY_BUDDY_IDS="$buddy_override"
-fi
-
 python_cmd=("$python_bin" -m src.main -a reserve "${pass_args[@]}")
 
 _run_attempt() {
@@ -79,14 +68,13 @@ _run_attempt() {
 
   echo "==> Try start=${start_time} duration=${duration}"
 
-  # Override per-attempt; project .env loader will NOT override existing env vars.
   local out
   set +e
-  out="$(
-    CGYY_RESERVATION_START_TIME="$start_time" \
-    CGYY_RESERVATION_DURATION_HOURS="$duration" \
-      "${python_cmd[@]}" 2>&1
-  )"
+  local cmd=("${python_cmd[@]}")
+  if [[ -n "$start_time" && -n "$duration" ]]; then
+    cmd+=("-s" "$start_time" "-n" "$duration")
+  fi
+  out="$("${cmd[@]}" 2>&1)"
   local rc=$?
   set -e
 
@@ -123,15 +111,8 @@ _split_csv() {
   done
 }
 
-pairs_source=""
 if [[ -n "$pattern_arg" ]]; then
-  pairs_source="$pattern_arg"
-elif [[ -n "${CGYY_RESERVE_OPTIONS:-}" ]]; then
-  pairs_source="${CGYY_RESERVE_OPTIONS}"
-fi
-
-if [[ -n "$pairs_source" ]]; then
-  IFS=',' read -r -a pairs <<<"$pairs_source"
+  IFS=',' read -r -a pairs <<<"$pattern_arg"
   for p in "${pairs[@]}"; do
     p="${p//[[:space:]]/}"
     [[ -z "$p" ]] && continue
@@ -147,36 +128,9 @@ if [[ -n "$pairs_source" ]]; then
   done
   exit 1
 fi
-
-start_times_csv="${CGYY_RESERVE_START_TIMES:-}"
-durations_csv="${CGYY_RESERVE_DURATIONS:-}"
-
-if [[ -z "$start_times_csv" && -z "$durations_csv" ]]; then
-  # No shell-level pattern configuration: delegate start/duration entirely to Python/.env.
-  if _run_attempt "${CGYY_RESERVATION_START_TIME:-}" "${CGYY_RESERVATION_DURATION_HOURS:-}"; then
-    exit 0
-  fi
-  exit 1
+ 
+# No shell-level pattern configuration: delegate start/duration entirely to Python/.env.
+if _run_attempt "" ""; then
+  exit 0
 fi
-
-start_times=()
-durations=()
-_split_csv "$start_times_csv" start_times
-_split_csv "$durations_csv" durations
-
-if [[ ${#start_times[@]} -eq 0 ]]; then
-  start_times=("${CGYY_RESERVATION_START_TIME:-}")
-fi
-if [[ ${#durations[@]} -eq 0 ]]; then
-  durations=("${CGYY_RESERVATION_DURATION_HOURS:-}")
-fi
-
-for st in "${start_times[@]}"; do
-  for du in "${durations[@]}"; do
-    if _run_attempt "$st" "$du"; then
-      exit 0
-    fi
-  done
-done
-
 exit 1

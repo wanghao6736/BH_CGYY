@@ -95,8 +95,8 @@ def _run_verify_captcha(workflow: ReservationWorkflow) -> None:
     print(format_request_result("验证码校验", result.success, result.message))
 
 
-def _run_day_info(workflow: ReservationWorkflow, date: str | None, show_order_param: bool) -> None:
-    search_date = date or workflow.api_settings.default_search_date
+def _run_day_info(workflow: ReservationWorkflow, show_order_param: bool) -> None:
+    search_date = workflow.api_settings.default_search_date
     logger.info("查询场地信息 date=%s", search_date)
     ok, msg, day_info = workflow.reservation_service.get_day_info_parsed(
         search_date, has_reserve_info=show_order_param
@@ -175,7 +175,7 @@ def main() -> None:
         type=int,
         default=None,
         const=-1,
-        help="筛选 siteId(=venueSiteId)。不传则全量显示；仅传 --venue-site-id 则使用 .env 的 CGYY_VENUE_SITE_ID。",
+        help="场地 siteId(=venueSiteId)。catalog 时用于筛选展示；day_info/reserve 时用于覆盖本次调用的 venueSiteId（不传则使用 .env/默认值）。仅传 --venue-site-id 则在 catalog 中使用 .env 的 CGYY_VENUE_SITE_ID。",
     )
     parser.add_argument(
         "-p",
@@ -184,9 +184,45 @@ def main() -> None:
         action="store_true",
         help="day_info 时同时查询并展示 orderParamView（包含 buddy 列表）；默认不查询，以便下单时只使用 .env 中的 CGYY_BUDDY_IDS。",
     )
+    parser.add_argument(
+        "-s",
+        "--start-time",
+        dest="start_time",
+        default=None,
+        help="day_info/reserve 使用的开始时间 (HH:MM)。不传则使用 .env 中 CGYY_RESERVATION_START_TIME 或默认值。",
+    )
+    parser.add_argument(
+        "-n",
+        "--duration",
+        dest="duration",
+        type=int,
+        default=None,
+        help="day_info/reserve 使用的连续时段数（整数）。不传则使用 .env 中 CGYY_RESERVATION_DURATION_HOURS 或默认值。",
+    )
+    parser.add_argument(
+        "-b",
+        "--buddies",
+        dest="buddies",
+        default=None,
+        help="reserve 使用的同伴 ID 列表，逗号分隔（如 7876,3343）。不传则使用 .env 中 CGYY_BUDDY_IDS。",
+    )
     args = parser.parse_args()
 
     workflow, catalog_service = build_app()
+
+    # 本次调用级别的设置覆盖：优先级为 CLI > main 中的设定值 > .env/环境变量 > 默认值
+    if args.date:
+        workflow.api_settings.default_search_date = args.date
+        workflow.user_settings.reservation_date = args.date
+        workflow.user_settings.week_start_date = args.date
+    if args.start_time:
+        workflow.user_settings.reservation_start_time = args.start_time
+    if args.duration is not None:
+        workflow.user_settings.reservation_duration_hours = args.duration
+    if args.venue_site_id is not None and args.venue_site_id != -1:
+        workflow.api_settings.venue_site_id = args.venue_site_id
+    if args.buddies:
+        workflow.user_settings.buddy_ids = args.buddies
 
     if args.action == "catalog":
         try:
@@ -208,7 +244,7 @@ def main() -> None:
             print(format_request_result("验证码校验", False, str(e)))
     elif args.action == "day_info":
         try:
-            _run_day_info(workflow, args.date, args.show_order_param)
+            _run_day_info(workflow, args.show_order_param)
         except Exception as e:
             logger.exception("查询场地信息失败")
             print(format_request_result("查询场地信息", False, str(e)))
@@ -233,7 +269,7 @@ def main() -> None:
     elif args.action == "reserve":
         try:
             logger.info("查询可预约场地…")
-            result = workflow.run_full_reservation(args.date)
+            result = workflow.run_full_reservation()
             if result.solutions:
                 date_str = result.reservation_date or workflow.api_settings.default_search_date
                 print(format_solutions_table(result.solutions, date_str, result.site_param))

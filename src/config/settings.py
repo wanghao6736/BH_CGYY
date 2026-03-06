@@ -91,12 +91,12 @@ def load_settings() -> Tuple[ApiSettings, UserSettings, AuthSettings]:
     user = UserSettings(
         phone=os.getenv("CGYY_PHONE", UserSettings.phone),
         buddy_ids=os.getenv("CGYY_BUDDY_IDS", UserSettings.buddy_ids),
-        reservation_date=os.getenv("CGYY_RESERVATION_DATE") or _today_str(),
+        reservation_date=_today_str(),
         reservation_order_json=os.getenv(
             "CGYY_RESERVATION_ORDER_JSON", UserSettings.reservation_order_json
         ),
         reservation_type=os.getenv("CGYY_RESERVATION_TYPE", UserSettings.reservation_type),
-        week_start_date=os.getenv("CGYY_WEEK_START_DATE") or ApiSettings.default_search_date or _today_str(),
+        week_start_date=api.default_search_date or _today_str(),
         reservation_start_time=os.getenv("CGYY_RESERVATION_START_TIME", UserSettings.reservation_start_time),
         reservation_duration_hours=int(
             os.getenv(
@@ -106,7 +106,7 @@ def load_settings() -> Tuple[ApiSettings, UserSettings, AuthSettings]:
         order_pin_x_max=int(os.getenv("CGYY_ORDER_PIN_X_MAX", UserSettings.order_pin_x_max)),
         order_pin_y_min=int(os.getenv("CGYY_ORDER_PIN_Y_MIN", UserSettings.order_pin_y_min)),
         order_pin_y_max=int(os.getenv("CGYY_ORDER_PIN_Y_MAX", UserSettings.order_pin_y_max)),
-        order_price=int(os.getenv("CGYY_ORDER_PRICE", UserSettings.order_price)),
+        order_price=UserSettings.order_price,
     )
     cookie = os.getenv("CGYY_COOKIE", AuthSettings.cookie)
     cg_auth = os.getenv("CGYY_CG_AUTH", AuthSettings.cg_authorization)

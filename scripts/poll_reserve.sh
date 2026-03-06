@@ -8,9 +8,6 @@ set -euo pipefail
 #   CGYY_POLL_MAX_ATTEMPTS   default 0 (0 = infinite)
 #   CGYY_NOTIFY_ON_FAIL      default 0 (set 1 to notify when giving up)
 #
-# Candidate time configs are the same as scripts/reserve_once.sh:
-#   CGYY_RESERVE_OPTIONS / CGYY_RESERVE_START_TIMES / CGYY_RESERVE_DURATIONS
-#
 # Usage:
 #   scripts/poll_reserve.sh [-d YYYY-MM-DD] [-p HH:MM/N,...] [-v SITE_ID] [-b BUDDIES] [-i INTERVAL_SEC] [-n MAX_ATTEMPTS]
 
