@@ -8,8 +8,8 @@ from src.parsers.captcha import (CaptchaParsed, CheckCaptchaParsed,
 from src.parsers.catalog import (CatalogParsed, SiteItem, SportItem,
                                  parse_catalog_data, parse_catalog_response)
 from src.parsers.common import get_by_path, parse_success_message
-from src.parsers.day_info import (DayInfoParsed, parse_day_info_data,
-                                  parse_day_info_response)
+from src.parsers.day_info import (DayInfoParsed, parse_info_data,
+                                  parse_info_response)
 from src.parsers.order import (OrderDetailParsed, OrderSpaceItem, SubmitParsed,
                                parse_order_detail_data,
                                parse_order_detail_response, parse_submit_data,
@@ -32,8 +32,8 @@ __all__ = [
     "get_by_path",
     "parse_success_message",
     "DayInfoParsed",
-    "parse_day_info_data",
-    "parse_day_info_response",
+    "parse_info_data",
+    "parse_info_response",
     "find_available_slots",
     "SlotChoice",
     "SlotSolution",

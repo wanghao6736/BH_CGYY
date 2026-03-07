@@ -11,7 +11,7 @@ from __future__ import annotations
      python -m src.tests.test_steps --step verify_captcha
 
   3) 测试当日场地信息查询：
-     python -m src.tests.test_steps --step day_info
+     python -m src.tests.test_steps --step info
 
   4) 测试完整预约流程（验证码 + 下单）：
      python -m src.tests.test_steps --step full
@@ -46,7 +46,7 @@ def step_verify_captcha() -> None:
     print("verify_json:", result.verification.verify_json)
 
 
-def step_day_info() -> None:
+def step_info() -> None:
     workflow = build_workflow()
     slots = workflow.reservation_service.get_available_slots()
     data = slots.get("data", {})
@@ -74,7 +74,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="分步测试 CGYY 预约流程")
     parser.add_argument(
         "--step",
-        choices=["fetch_captcha", "verify_captcha", "day_info", "order_detail", "full"],
+        choices=["fetch_captcha", "verify_captcha", "info", "order_detail", "full"],
         default="full",
         help="要执行的测试步骤",
     )
@@ -84,8 +84,8 @@ def main() -> None:
         step_fetch_captcha()
     elif args.step == "verify_captcha":
         step_verify_captcha()
-    elif args.step == "day_info":
-        step_day_info()
+    elif args.step == "info":
+        step_info()
     elif args.step == "order_detail":
         step_order_detail()
     elif args.step == "full":
