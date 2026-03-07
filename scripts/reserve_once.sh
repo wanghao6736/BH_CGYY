@@ -4,7 +4,7 @@ set -euo pipefail
 # Run reservation workflow once, trying multiple candidate start-times/durations.
 #
 # Options:
-#   -d DATE        预约日期 (YYYY-MM-DD)，透传给 python -m src.main -a reserve -d
+#   -d DATE        预约日期 (YYYY-MM-DD)，透传给 python -m src.main reserve -d
 #   -p PATTERN     候选时间段列表，如 "15:00/2,17:00/2,19:00/1"
 #   -v SITE_ID     覆盖 CGYY_VENUE_SITE_ID
 #   -b BUDDIES     覆盖 CGYY_BUDDY_IDS，逗号分隔
@@ -60,7 +60,7 @@ if [[ -z "$python_bin" ]]; then
   fi
 fi
 
-python_cmd=("$python_bin" -m src.main -a reserve "${pass_args[@]}")
+python_cmd=("$python_bin" -m src.main reserve "${pass_args[@]}")
 
 _run_attempt() {
   local start_time="$1"

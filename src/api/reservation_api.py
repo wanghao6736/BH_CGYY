@@ -7,7 +7,7 @@ from src.api.client import ApiClient
 from src.config.settings import ApiSettings, UserSettings
 from src.utils.sign_utils import params_to_sign_parts
 
-REL_DAY_INFO = "/api/reservation/day/info"
+REL_info = "/api/reservation/day/info"
 REL_SUBMIT = "/api/reservation/order/submit"
 REL_DETAIL = "/api/venue/finances/order/detail"
 REL_CANCEL = "/api/venue/finances/order/cancel"
@@ -19,7 +19,7 @@ class ReservationApi:
     api_settings: ApiSettings
     user_settings: UserSettings
 
-    def get_day_info(self, search_date: str | None = None, hasReserveInfo: bool = False) -> Dict[str, Any]:
+    def get_info(self, search_date: str | None = None, hasReserveInfo: bool = False) -> Dict[str, Any]:
         if search_date is None:
             search_date = self.api_settings.default_search_date
         venue_site_id = self.api_settings.venue_site_id
@@ -34,8 +34,8 @@ class ReservationApi:
         if hasReserveInfo:
             params["hasReserveInfo"] = 1
         sign_parts = params_to_sign_parts(params)
-        return self.client.get(REL_DAY_INFO, params=params, sign_parts=sign_parts)
-    
+        return self.client.get(REL_info, params=params, sign_parts=sign_parts)
+
     def get_order_info(self, venueTradeNo: str) -> Dict[str, Any]:
         from src.utils.time_utils import current_timestamp_ms
 

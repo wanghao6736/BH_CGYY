@@ -1,4 +1,4 @@
-"""Parse day_info API response (data section). Pure functions on dict, no I/O."""
+"""Parse info API response (data section). Pure functions on dict, no I/O."""
 
 from __future__ import annotations
 
@@ -184,9 +184,9 @@ def parse_site_param(data: Dict[str, Any]) -> Optional[SiteParam]:
     )
 
 
-def parse_day_info_data(data: Dict[str, Any]) -> DayInfoParsed:
+def parse_info_data(data: Dict[str, Any]) -> DayInfoParsed:
     """
-    Parse full day_info data section. Use with data = resp["data"] or load from JSON file.
+    Parse full info data section. Use with data = resp["data"] or load from JSON file.
     """
     reservation_date_list = get_by_path(data, "reservationDateList") or []
     if not isinstance(reservation_date_list, list):
@@ -202,14 +202,14 @@ def parse_day_info_data(data: Dict[str, Any]) -> DayInfoParsed:
     )
 
 
-def parse_day_info_response(resp: Dict[str, Any]) -> tuple[bool, str, Optional[DayInfoParsed]]:
+def parse_info_response(resp: Dict[str, Any]) -> tuple[bool, str, Optional[DayInfoParsed]]:
     """
-    Parse full day_info API response. Returns (success, message, parsed_data).
+    Parse full info API response. Returns (success, message, parsed_data).
     parsed_data is None when success is False.
     """
     from src.parsers.common import parse_success_message
 
     success, message = parse_success_message(resp)
     data = resp.get("data") if isinstance(resp.get("data"), dict) else None
-    parsed = parse_day_info_data(data) if success and data else None
+    parsed = parse_info_data(data) if success and data else None
     return success, message, parsed

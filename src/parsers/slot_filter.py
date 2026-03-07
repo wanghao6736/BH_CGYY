@@ -136,3 +136,35 @@ def _same_choices(a: List[SlotChoice], b: List[SlotChoice]) -> bool:
     if len(a) != len(b):
         return False
     return all((x.space_id == y.space_id and x.time_id == y.time_id) for x, y in zip(a, b))
+
+
+def _distinct_start_times(time_slots: List[TimeSlot]) -> List[str]:
+    """Return sorted distinct begin_time values from time_slots."""
+    return sorted({t.begin_time for t in time_slots})
+
+
+def find_available_slots_for_all_starts(
+    parsed: DayInfoParsed,
+    date: str,
+    duration_hours: int,
+    allow_multi_space: bool = True,
+    require_same_first_digit: bool = True,
+) -> List[SlotSolution]:
+    """
+    对当日每个可能的开始时间分别查询可预约方案，返回所有方案的并集。
+    -s 不指定时使用此逻辑，返回所有满足时间段信息的方案。
+    """
+    starts = _distinct_start_times(parsed.time_slots)
+    all_solutions: List[SlotSolution] = []
+    seen: set[tuple[tuple[int, int], ...]] = set()
+
+    for start_time in starts:
+        sols = find_available_slots(
+            parsed, date, start_time, duration_hours, allow_multi_space, require_same_first_digit
+        )
+        for s in sols:
+            key = tuple((c.space_id, c.time_id) for c in s.choices)
+            if key not in seen:
+                seen.add(key)
+                all_solutions.append(s)
+    return all_solutions

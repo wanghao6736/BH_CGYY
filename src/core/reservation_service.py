@@ -5,13 +5,16 @@ from typing import Any, Dict, Optional
 
 from src.api.reservation_api import ReservationApi
 from src.config.settings import ApiSettings, UserSettings
-from src.parsers.day_info import DayInfoParsed, parse_day_info_response
+from src.parsers.day_info import DayInfoParsed, parse_info_response
 from src.parsers.order import (OrderDetailParsed, SubmitParsed,
                                parse_order_detail_response,
                                parse_submit_response, parse_success_message)
 from src.parsers.slot_filter import SlotSolution
 from src.parsers.slot_filter import \
     find_available_slots as find_available_slots_impl
+from src.parsers.slot_filter import \
+    find_available_slots_for_all_starts as \
+    find_available_slots_for_all_starts_impl
 from src.utils.crypto_utils import AesCbcEncryptor
 
 
@@ -38,14 +41,14 @@ class ReservationService:
 
     def get_available_slots(self, search_date: Optional[str] = None, has_reserve_info: bool = False) -> Dict[str, Any]:
         """Raw API response (no parsing)."""
-        return self.api.get_day_info(search_date=search_date, hasReserveInfo=has_reserve_info)
+        return self.api.get_info(search_date=search_date, hasReserveInfo=has_reserve_info)
 
-    def get_day_info_parsed(
+    def get_info_parsed(
         self, search_date: Optional[str] = None, has_reserve_info: bool = False
     ) -> tuple[bool, str, Optional[DayInfoParsed]]:
-        """Fetch day_info and parse via parsers; no parsing logic here. Returns (success, message, parsed)."""
-        raw = self.api.get_day_info(search_date=search_date, hasReserveInfo=has_reserve_info)
-        return parse_day_info_response(raw)
+        """Fetch info and parse via parsers; no parsing logic here. Returns (success, message, parsed)."""
+        raw = self.api.get_info(search_date=search_date, hasReserveInfo=has_reserve_info)
+        return parse_info_response(raw)
 
     def find_available_slots(
         self,
@@ -59,6 +62,27 @@ class ReservationService:
         """Delegate to parsers.slot_filter; 返回带总费用与各时段详情的方案列表。"""
         return find_available_slots_impl(
             parsed, date, start_time, duration_hours, allow_multi_space, require_same_first_digit
+        )
+
+    def find_available_slots_with_optional_start(
+        self,
+        parsed: DayInfoParsed,
+        date: str,
+        start_time: str | None,
+        duration_hours: int,
+        allow_multi_space: bool = True,
+        require_same_first_digit: bool = True,
+    ) -> list[SlotSolution]:
+        """
+        start_time 为 None 时对当日每个开始时间分别查询并返回所有方案并集；
+        否则与 find_available_slots 行为一致。
+        """
+        if start_time:
+            return find_available_slots_impl(
+                parsed, date, start_time, duration_hours, allow_multi_space, require_same_first_digit
+            )
+        return find_available_slots_for_all_starts_impl(
+            parsed, date, duration_hours, allow_multi_space, require_same_first_digit
         )
 
     def get_order_detail(self, venueTradeNo: str) -> Dict[str, Any]:
