@@ -115,28 +115,34 @@ class ReservationWorkflow:
         self,
     ) -> Tuple[CaptchaData, CaptchaVerificationResult]:
         """带重试的验证码获取与校验。"""
-        logger.info("正在进行验证码校验，请稍候...")
+        max_attempts = max(self.api_settings.retry_count, 1)
+        logger.info("正在进行验证码校验，请稍候... (最多 %d 次)", max_attempts)
         last_exc: Optional[Exception] = None
-        captcha_data: Optional[CaptchaData] = None
-        captcha_result: Optional[CaptchaVerificationResult] = None
 
-        for attempt in range(self.api_settings.retry_count):
+        for attempt in range(max_attempts):
+            data: Optional[CaptchaData] = None
+            result: Optional[CaptchaVerificationResult] = None
             try:
-                captcha_data = self.captcha_service.fetch_captcha()
+                data = self.captcha_service.fetch_captcha()
                 time.sleep(random.uniform(self.delay_min, self.delay_max))
-                captcha_result = self.captcha_service.verify_captcha(captcha_data)
-                logger.info("验证码校验 %s", "通过" if captcha_result.success else "未通过")
-                if captcha_result.success:
-                    break
-                last_exc = CaptchaError(captcha_result.message or "验证码校验未通过")
+                result = self.captcha_service.verify_captcha(data)
             except CaptchaError as e:
                 last_exc = e
-            if attempt < self.api_settings.retry_count - 1:
+                logger.warning("验证码校验失败 (%d/%d): %s", attempt + 1, max_attempts, e)
+                if attempt < max_attempts - 1:
+                    time.sleep(self.api_settings.retry_interval_sec)
+                continue
+
+            if result.success:
+                logger.info("验证码校验通过 (%d/%d)", attempt + 1, max_attempts)
+                return data, result
+
+            last_exc = CaptchaError(result.message or "验证码校验未通过")
+            logger.warning("验证码校验未通过 (%d/%d): %s", attempt + 1, max_attempts, result.message)
+            if attempt < max_attempts - 1:
                 time.sleep(self.api_settings.retry_interval_sec)
 
-        if captcha_data is None or captcha_result is None:
-            raise last_exc or CaptchaError("验证码流程失败")
-        return captcha_data, captcha_result
+        raise last_exc or CaptchaError("验证码流程失败")
 
     # ------------------------------------------------------------------
 
