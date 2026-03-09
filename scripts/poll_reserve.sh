@@ -46,6 +46,9 @@ notify() {
   if [[ -x "$repo_root/scripts/notify_macos.sh" ]]; then
     "$repo_root/scripts/notify_macos.sh" "$title" "$msg" || true
   fi
+  if [[ -x "$repo_root/scripts/notify_ios.sh" ]]; then
+    "$repo_root/scripts/notify_ios.sh" "$title" "$msg" || true
+  fi
 }
 
 attempt=0
