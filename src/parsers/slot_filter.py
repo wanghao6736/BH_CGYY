@@ -1,7 +1,12 @@
-"""Filter available slots by start time, duration, and same-space-id-first-digit rule."""
+"""Enumerate all feasible slot solutions for a given date/start/slot_count.
+
+本模块只负责**枚举**满足连续时段要求的所有组合解，不做任何"同场地优先 / 价格优先"等偏好过滤，
+这些策略由 `src.core.selection_strategies` 负责。
+"""
 
 from __future__ import annotations
 
+import itertools
 from dataclasses import dataclass, field
 from typing import List
 
@@ -23,15 +28,12 @@ class SlotChoice:
 
 @dataclass
 class SlotSolution:
-    """一组可预约方案：若干时段 + 总费用 + 总时长。"""
+    """一组可预约方案：若干时段 + 总费用 + 时段数 + 真实总时长。"""
 
     choices: List[SlotChoice] = field(default_factory=list)
     total_fee: float = 0.0
-    duration_hours: float = 0.0
-
-
-def _first_digit(sid: int) -> str:
-    return str(sid)[0] if sid else ""
+    slot_count: int = 0
+    total_hours: float = 0.0
 
 
 def _time_id_to_range(time_slots: List[TimeSlot]) -> dict[int, tuple[str, str]]:
@@ -39,12 +41,33 @@ def _time_id_to_range(time_slots: List[TimeSlot]) -> dict[int, tuple[str, str]]:
     return {t.id: (t.begin_time, t.end_time) for t in time_slots}
 
 
+def _parse_hhmm_to_minutes(hhmm: str) -> int | None:
+    """'HH:MM' -> 总分钟数，解析失败返回 None。"""
+    parts = hhmm.split(":")
+    if len(parts) != 2:
+        return None
+    try:
+        return int(parts[0]) * 60 + int(parts[1])
+    except ValueError:
+        return None
+
+
+def _calc_total_hours(choices: List[SlotChoice]) -> float:
+    """根据各时段的 start_time/end_time 计算真实总时长（小时）。"""
+    total_minutes = 0
+    for c in choices:
+        s = _parse_hhmm_to_minutes(c.start_time)
+        e = _parse_hhmm_to_minutes(c.end_time)
+        if s is not None and e is not None and e > s:
+            total_minutes += e - s
+    return round(total_minutes / 60, 1)
+
+
 def _consecutive_time_ids(
-    time_slots: List[TimeSlot], start_time: str, duration_hours: int
+    time_slots: List[TimeSlot], start_time: str, slot_count: int
 ) -> List[int]:
-    """Return list of time_slot ids covering [start_time, start_time + duration_hours)."""
+    """返回从 start_time 起连续 slot_count 个 timeSlot 的 id 列表。"""
     sorted_slots = sorted(time_slots, key=lambda t: t.begin_time)
-    n = len(sorted_slots)
     start_idx = None
     for i, t in enumerate(sorted_slots):
         if t.begin_time == start_time:
@@ -52,90 +75,77 @@ def _consecutive_time_ids(
             break
     if start_idx is None:
         return []
-    end_idx = min(start_idx + duration_hours, n)
+    end_idx = start_idx + slot_count
+    if end_idx > len(sorted_slots):
+        return []
     return [sorted_slots[j].id for j in range(start_idx, end_idx)]
 
 
-def find_available_slots(
-    parsed: DayInfoParsed,
-    date: str,
-    start_time: str,
-    duration_hours: int,
-    allow_multi_space: bool = True,
-    require_same_first_digit: bool = True,
+def _make_choice(
+    space: SpaceSchedule,
+    tid: int,
+    time_range: dict[int, tuple[str, str]],
+    default_state: SlotState,
+) -> SlotChoice:
+    st = space.slots.get(str(tid), default_state)
+    beg, end = time_range.get(tid, ("", ""))
+    fee = float(st.order_fee or 0)
+    return SlotChoice(
+        space_id=space.space_id,
+        time_id=tid,
+        space_name=space.space_name,
+        start_time=beg,
+        end_time=end,
+        order_fee=fee,
+    )
+
+
+def _to_solution(choices: List[SlotChoice]) -> SlotSolution:
+    total = sum(c.order_fee for c in choices)
+    return SlotSolution(
+        choices=choices,
+        total_fee=total,
+        slot_count=len(choices),
+        total_hours=_calc_total_hours(choices),
+    )
+
+
+def _enumerate_solutions_for_ids(
+    schedules: List[SpaceSchedule],
+    required_ids: List[int],
+    time_range: dict[int, tuple[str, str]],
 ) -> List[SlotSolution]:
-    """
-    找出覆盖 [start_time, start_time + duration_hours) 的所有可预约方案。
-    每个方案包含：各时段在何场地、开始/结束时间、该时段费用，以及总费用和总时长。
-    """
-    required_ids = _consecutive_time_ids(parsed.time_slots, start_time, duration_hours)
-    if not required_ids:
+    """枚举给定一组 time_id 的所有可行组合解（每个 time_id 在某个可用场地上）。"""
+    if not required_ids or not schedules:
         return []
 
-    time_range = _time_id_to_range(parsed.time_slots)
-    schedules = parsed.space_schedules_by_date.get(date, [])
-    _unavail = SlotState(reservation_status=4, is_available=False, order_fee=0.0)
-    solutions: List[SlotSolution] = []
+    default_state = SlotState(reservation_status=4, is_available=False, order_fee=0.0)
 
-    def make_choice(space: SpaceSchedule, tid: int) -> SlotChoice:
-        st = space.slots.get(str(tid), _unavail)
-        beg, end = time_range.get(tid, ("", ""))
-        fee = float(st.order_fee or 0)
-        return SlotChoice(
-            space_id=space.space_id,
-            time_id=tid,
-            space_name=space.space_name,
-            start_time=beg,
-            end_time=end,
-            order_fee=fee,
-        )
-
-    def to_solution(choices: List[SlotChoice]) -> SlotSolution:
-        total = sum(c.order_fee for c in choices)
-        return SlotSolution(choices=choices, total_fee=total, duration_hours=float(len(choices)))
-
-    # 单场地：该场地所有所需时段均空闲
-    for space in schedules:
-        if all(space.slots.get(str(tid), _unavail).is_available for tid in required_ids):
-            choices = [make_choice(space, tid) for tid in required_ids]
-            solutions.append(to_solution(choices))
-
-    if not allow_multi_space or not require_same_first_digit:
-        return solutions
-
-    # 多场地：每个时段由不同场地覆盖，场地 id 首位相同
-    by_tid: dict[int, List[tuple[SpaceSchedule, int, str]]] = {tid: [] for tid in required_ids}
-    for space in schedules:
-        for tid in required_ids:
-            if space.slots.get(str(tid), _unavail).is_available:
-                by_tid[tid].append((space, space.space_id, space.space_name))
-
-    all_first_digits = set()
+    available_per_tid: list[list[SpaceSchedule]] = []
     for tid in required_ids:
-        for _, sid, _ in by_tid[tid]:
-            all_first_digits.add(_first_digit(sid))
+        candidates: list[SpaceSchedule] = []
+        for space in schedules:
+            state = space.slots.get(str(tid), default_state)
+            if state.is_available:
+                candidates.append(space)
+        if not candidates:
+            return []
+        available_per_tid.append(candidates)
 
-    for fd in all_first_digits:
-        choice_per_tid: List[SlotChoice] = []
-        for tid in required_ids:
-            candidates = [(sp, sid, sname) for sp, sid, sname in by_tid[tid] if _first_digit(sid) == fd]
-            if not candidates:
-                choice_per_tid = []
-                break
-            sp, _, _ = candidates[0]
-            choice_per_tid.append(make_choice(sp, tid))
-        if len(choice_per_tid) == len(required_ids):
-            sol = to_solution(choice_per_tid)
-            if not any(_same_choices(sol.choices, s.choices) for s in solutions):
-                solutions.append(sol)
+    solutions: List[SlotSolution] = []
+    seen: set[tuple[tuple[int, int], ...]] = set()
+
+    for spaces_combo in itertools.product(*available_per_tid):
+        choices: List[SlotChoice] = []
+        for tid, space in zip(required_ids, spaces_combo):
+            choices.append(_make_choice(space, tid, time_range, default_state))
+        key = tuple((c.space_id, c.time_id) for c in choices)
+        if key in seen:
+            continue
+        seen.add(key)
+        solutions.append(_to_solution(choices))
 
     return solutions
-
-
-def _same_choices(a: List[SlotChoice], b: List[SlotChoice]) -> bool:
-    if len(a) != len(b):
-        return False
-    return all((x.space_id == y.space_id and x.time_id == y.time_id) for x, y in zip(a, b))
 
 
 def _distinct_start_times(time_slots: List[TimeSlot]) -> List[str]:
@@ -143,28 +153,42 @@ def _distinct_start_times(time_slots: List[TimeSlot]) -> List[str]:
     return sorted({t.begin_time for t in time_slots})
 
 
-def find_available_slots_for_all_starts(
+def find_solutions(
     parsed: DayInfoParsed,
     date: str,
-    duration_hours: int,
-    allow_multi_space: bool = True,
-    require_same_first_digit: bool = True,
+    start_time: str | None,
+    slot_count: int,
 ) -> List[SlotSolution]:
     """
-    对当日每个可能的开始时间分别查询可预约方案，返回所有方案的并集。
-    -s 不指定时使用此逻辑，返回所有满足时间段信息的方案。
+    枚举指定日期、开始时间与连续时段数下的所有可预约方案。
+
+    - start_time 不为 None：仅从该开始时间起枚举一组连续时段；
+    - start_time 为 None：对当日每个可能的开始时间分别枚举，并返回所有方案的并集。
     """
-    starts = _distinct_start_times(parsed.time_slots)
+    time_range = _time_id_to_range(parsed.time_slots)
+    schedules = parsed.space_schedules_by_date.get(date, [])
+    if not schedules or not parsed.time_slots:
+        return []
+
     all_solutions: List[SlotSolution] = []
     seen: set[tuple[tuple[int, int], ...]] = set()
 
-    for start_time in starts:
-        sols = find_available_slots(
-            parsed, date, start_time, duration_hours, allow_multi_space, require_same_first_digit
-        )
+    def _add_solutions_for_start(st: str) -> None:
+        required_ids = _consecutive_time_ids(parsed.time_slots, st, slot_count)
+        if not required_ids:
+            return
+        sols = _enumerate_solutions_for_ids(schedules, required_ids, time_range)
         for s in sols:
             key = tuple((c.space_id, c.time_id) for c in s.choices)
-            if key not in seen:
-                seen.add(key)
-                all_solutions.append(s)
+            if key in seen:
+                continue
+            seen.add(key)
+            all_solutions.append(s)
+
+    if start_time:
+        _add_solutions_for_start(start_time)
+    else:
+        for st in _distinct_start_times(parsed.time_slots):
+            _add_solutions_for_start(st)
+
     return all_solutions

@@ -64,4 +64,8 @@ def validate_and_normalize_args(args: Namespace) -> Namespace:
             )
         args.buddies = norm
 
+    # 场地筛选策略字符串：目前仅做去首尾空白，具体策略名在业务层解析
+    if getattr(args, "strategy", None):
+        args.strategy = str(args.strategy).strip()
+
     return args
