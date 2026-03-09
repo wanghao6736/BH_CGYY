@@ -18,7 +18,7 @@ class ApiSettings:
     aes_cbc_key: str = ""
     aes_cbc_iv: str = ""
     venue_site_id: int = 57
-    default_search_date: str = _today_str()  # 使用当天，接口支持三天内含当天
+    default_search_date: str = ""  # 使用当天，接口支持三天内含当天
     # 验证码获取与校验之间的延迟区间（秒）
     captcha_delay_min: float = 1.0
     captcha_delay_max: float = 2.5
@@ -41,8 +41,9 @@ class UserSettings:
     order_pin_y_min: int = 600
     order_pin_y_max: int = 700
     order_price: float = 50.0
-    reservation_start_time: str = "17:00"
-    reservation_duration_hours: int = 2
+    reservation_start_time: str = ""
+    reservation_slot_count: int = 2
+    selection_strategy: str = "same_first_digit,same_venue,cheapest"
 
 
 @dataclass
@@ -98,15 +99,18 @@ def load_settings() -> Tuple[ApiSettings, UserSettings, AuthSettings]:
         reservation_type=os.getenv("CGYY_RESERVATION_TYPE", UserSettings.reservation_type),
         week_start_date=api.default_search_date or _today_str(),
         reservation_start_time=os.getenv("CGYY_RESERVATION_START_TIME", UserSettings.reservation_start_time),
-        reservation_duration_hours=int(
+        reservation_slot_count=int(
             os.getenv(
-                "CGYY_RESERVATION_DURATION_HOURS", str(
-                    UserSettings.reservation_duration_hours))),
+                "CGYY_RESERVATION_SLOT_COUNT", str(
+                    UserSettings.reservation_slot_count))),
         order_pin_x_min=int(os.getenv("CGYY_ORDER_PIN_X_MIN", UserSettings.order_pin_x_min)),
         order_pin_x_max=int(os.getenv("CGYY_ORDER_PIN_X_MAX", UserSettings.order_pin_x_max)),
         order_pin_y_min=int(os.getenv("CGYY_ORDER_PIN_Y_MIN", UserSettings.order_pin_y_min)),
         order_pin_y_max=int(os.getenv("CGYY_ORDER_PIN_Y_MAX", UserSettings.order_pin_y_max)),
         order_price=UserSettings.order_price,
+        selection_strategy=os.getenv(
+            "CGYY_SELECTION_STRATEGY", UserSettings.selection_strategy
+        ),
     )
     cookie = os.getenv("CGYY_COOKIE", AuthSettings.cookie)
     cg_auth = os.getenv("CGYY_CG_AUTH", AuthSettings.cg_authorization)

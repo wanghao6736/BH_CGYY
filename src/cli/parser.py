@@ -58,6 +58,16 @@ def _add_common_options(parser: argparse.ArgumentParser) -> None:
         default=None,
         help="订单编号，order-detail / cancel-order 必填",
     )
+    parser.add_argument(
+        "-S",
+        "--strategy",
+        dest="strategy",
+        default=None,
+        help=(
+            "场地筛选策略，逗号分隔，例如 same_first_digit,same_venue,cheapest；"
+            "不指定则使用环境变量 CGYY_SELECTION_STRATEGY 或默认策略"
+        ),
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:

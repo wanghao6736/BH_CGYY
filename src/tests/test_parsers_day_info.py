@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 
 from src.parsers.day_info import parse_info_data, parse_info_response
-from src.parsers.slot_filter import find_available_slots
+from src.parsers.slot_filter import find_solutions
 
 
 def _load_fixture(name: str) -> dict:
@@ -48,20 +48,20 @@ def test_parse_info_full_response() -> None:
     assert len(parsed.reservation_date_list) >= 1
 
 
-def test_find_available_slots() -> None:
-    """Find slots for 08:00, 2 hours; each solution has choices + total_fee + duration."""
+def test_find_solutions() -> None:
+    """Find slots for 12:00, 1 slot; each solution has choices + total_fee + slot_count + total_hours."""
     raw = _load_fixture("get_info.json")
     data = raw.get("data", {})
     parsed = parse_info_data(data)
     date = parsed.reservation_date_list[0] if parsed.reservation_date_list else "2026-03-06"
-    solutions = find_available_slots(
-        parsed, date=date, start_time="12:00", duration_hours=1
+    solutions = find_solutions(
+        parsed, date=date, start_time="12:00", slot_count=1
     )
     for sol in solutions:
-        assert len(sol.choices) == 1  # 2 hours -> 2 SlotChoice
-        assert sol.duration_hours == 1.0
+        assert len(sol.choices) == 1
+        assert sol.slot_count == 1
+        assert sol.total_hours > 0
         assert sol.total_fee == sum(c.order_fee for c in sol.choices)
-        print(sol)
         for choice in sol.choices:
             assert choice.space_id and choice.time_id
             assert choice.start_time and choice.end_time
@@ -72,5 +72,5 @@ if __name__ == "__main__":
     print("parse_info_data: ok")
     test_parse_info_full_response()
     print("parse_info_response: ok")
-    test_find_available_slots()
-    print("find_available_slots: ok")
+    test_find_solutions()
+    print("find_solutions: ok")
