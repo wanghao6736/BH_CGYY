@@ -7,11 +7,13 @@ import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, List, Optional, Tuple
 
-from src.core.captcha_service import CaptchaService, CaptchaVerificationResult
+from src.core.captcha_service import (CaptchaData, CaptchaService,
+                                      CaptchaVerificationResult)
+from src.core.exceptions import BuddyConfigError, CaptchaError, QueryError
 from src.core.reservation_service import ReservationResult, ReservationService
-from src.core.selection_strategies import pick_solution
+from src.core.selection_strategies import apply_pipeline
 from src.parsers.day_info import DayInfoParsed, SiteParam
-from src.parsers.slot_filter import SlotSolution
+from src.parsers.slot_filter import SlotSolution, find_solutions
 
 if TYPE_CHECKING:
     from src.config.settings import ApiSettings, UserSettings
@@ -24,7 +26,7 @@ class ReservationQuery:
     """统一查询参数：info 与 reserve 共用。"""
     date: str
     start_time: Optional[str] = None  # None 表示返回所有开始时间的方案
-    duration_hours: int = 1
+    slot_count: int = 1
     show_order_param: bool = False
 
 
@@ -67,68 +69,57 @@ class ReservationWorkflow:
             search_date, has_reserve_info=query.show_order_param
         )
         if not ok or not info:
-            raise RuntimeError(f"QUERY: 查询场地信息失败：{msg}")
+            raise QueryError(f"查询场地信息失败：{msg}")
         book_date = (info.reservation_date_list or [search_date])[0]
-        solutions = self.reservation_service.find_available_slots_with_optional_start(
+        raw_solutions = find_solutions(
             info,
             book_date,
             query.start_time,
-            query.duration_hours,
+            query.slot_count,
         )
+        solutions = apply_pipeline(raw_solutions, self.user_settings.selection_strategy)
         return info, book_date, solutions
 
-    def run_full_reservation(self, search_date: str | None = None) -> FullReservationResult:
-        date = search_date or self.api_settings.default_search_date
-        query = ReservationQuery(
-            date=date,
-            start_time=self.user_settings.reservation_start_time or None,
-            duration_hours=self.user_settings.reservation_duration_hours,
-            show_order_param=False,
-        )
-        info, book_date, solutions = self.get_solutions(query)
-        if not solutions:
-            st = query.start_time or "任意"
-            raise RuntimeError(f"QUERY: 📅 {book_date} {st} 起 {query.duration_hours} 时段暂无可用场地")
-        first_solution = pick_solution(solutions, mode="first")
-        logger.info("找到 %d 个可预约方案，使用第 1 个 (总价=%.2f)", len(solutions), first_solution.total_fee)
-        reservation_order_json = json.dumps(
-            [{"spaceId": str(c.space_id), "timeId": str(c.time_id)} for c in first_solution.choices],
-            separators=(",", ":"),
-        )
-        # 同伴选择：完全由环境变量 CGYY_BUDDY_IDS 决定，不再自动从 orderParamView 选择。
-        # - 若 siteParam.buddyNumMin==0：不传 buddyIds/buddyUids（显式传入 "" 触发 payload 省略）
-        # - 若 buddyNumMin>=1：要求 env 中配置的 buddyIds 至少满足人数要求，否则报错提示用户先配置 .env
+    # ------------------------------------------------------------------
+    # run_full_reservation 的子步骤
+    # ------------------------------------------------------------------
+
+    def _resolve_buddy_ids(self, info: DayInfoParsed) -> str:
+        """根据场地同伴人数要求和用户 .env 配置确定最终 buddyIds。"""
         if not info.site_param:
-            buddy_ids = self.user_settings.buddy_ids
-        else:
-            buddy_num_min = max(0, int(info.site_param.buddy_num_min or 0))
-            buddy_num_max = max(0, int(info.site_param.buddy_num_max or 0))
+            return self.user_settings.buddy_ids
 
-            if buddy_num_min <= 0:
-                buddy_ids = ""
-            else:
-                need = buddy_num_min
-                if buddy_num_max > 0:
-                    need = min(need, buddy_num_max)
+        buddy_num_min = max(0, int(info.site_param.buddy_num_min or 0))
+        buddy_num_max = max(0, int(info.site_param.buddy_num_max or 0))
 
-                configured = [
-                    s.strip()
-                    for s in (self.user_settings.buddy_ids or "").split(",")
-                    if s.strip()
-                ]
-                if len(configured) < need:
-                    raise RuntimeError(
-                        f"QUERY: 该场地要求至少 {buddy_num_min} 名同伴，但 .env 中 CGYY_BUDDY_IDS 配置不足 "
-                        f"(need={need}, got={len(configured)})，请先在 .env 中配置同伴 id。"
-                    )
-                buddy_ids = ",".join(configured[:need])
-        order_price = int(round(first_solution.total_fee))
+        if buddy_num_min <= 0:
+            return ""
 
-        # Captcha recognition/verification is not covered by HTTP retry.
-        # Keep retry strategy consistent with ApiClient: retry_count + retry_interval_sec.
+        need = buddy_num_min
+        if buddy_num_max > 0:
+            need = min(need, buddy_num_max)
+
+        configured = [
+            s.strip()
+            for s in (self.user_settings.buddy_ids or "").split(",")
+            if s.strip()
+        ]
+        if len(configured) < need:
+            raise BuddyConfigError(
+                f"该场地要求至少 {buddy_num_min} 名同伴，但 .env 中 CGYY_BUDDY_IDS 配置不足 "
+                f"(need={need}, got={len(configured)})，请先在 .env 中配置同伴 id。"
+            )
+        return ",".join(configured[:need])
+
+    def _verify_captcha_with_retry(
+        self,
+    ) -> Tuple[CaptchaData, CaptchaVerificationResult]:
+        """带重试的验证码获取与校验。"""
+        logger.info("正在进行验证码校验，请稍候...")
         last_exc: Optional[Exception] = None
-        captcha_data = None
-        captcha_result = None
+        captcha_data: Optional[CaptchaData] = None
+        captcha_result: Optional[CaptchaVerificationResult] = None
+
         for attempt in range(self.api_settings.retry_count):
             try:
                 captcha_data = self.captcha_service.fetch_captcha()
@@ -137,15 +128,49 @@ class ReservationWorkflow:
                 logger.info("验证码校验 %s", "通过" if captcha_result.success else "未通过")
                 if captcha_result.success:
                     break
-                last_exc = RuntimeError(f"CAPTCHA: {captcha_result.message or '验证码校验未通过'}")
-            except RuntimeError as e:
-                last_exc = e if str(e).startswith("CAPTCHA:") else RuntimeError(f"CAPTCHA: {e}")
+                last_exc = CaptchaError(captcha_result.message or "验证码校验未通过")
+            except CaptchaError as e:
+                last_exc = e
             if attempt < self.api_settings.retry_count - 1:
                 time.sleep(self.api_settings.retry_interval_sec)
 
         if captcha_data is None or captcha_result is None:
-            raise (last_exc or RuntimeError("CAPTCHA: 验证码流程失败"))
-        logger.info("提交订单… date=%s", book_date)
+            raise last_exc or CaptchaError("验证码流程失败")
+        return captcha_data, captcha_result
+
+    # ------------------------------------------------------------------
+
+    def run_full_reservation(self, search_date: str | None = None) -> FullReservationResult:
+        date = search_date or self.api_settings.default_search_date
+        query = ReservationQuery(
+            date=date,
+            start_time=self.user_settings.reservation_start_time or None,
+            slot_count=self.user_settings.reservation_slot_count,
+            show_order_param=False,
+        )
+
+        # 1) 查询可用方案
+        info, book_date, solutions = self.get_solutions(query)
+        if not solutions:
+            st = query.start_time or "任意"
+            raise QueryError(f"📅 {book_date} {st} 起 {query.slot_count} 时段暂无可用场地")
+
+        first_solution = solutions[0]
+        logger.info("找到 %d 个可预约方案，使用第 1 个 (总价=%.2f)", len(solutions), first_solution.total_fee)
+        reservation_order_json = json.dumps(
+            [{"spaceId": str(c.space_id), "timeId": str(c.time_id)} for c in first_solution.choices],
+            separators=(",", ":"),
+        )
+
+        # 2) 确定同伴
+        buddy_ids = self._resolve_buddy_ids(info)
+        order_price = int(round(first_solution.total_fee))
+
+        # 3) 验证码校验（含重试）
+        captcha_data, captcha_result = self._verify_captcha_with_retry()
+
+        # 4) 提交订单
+        logger.info("提交订单... date=%s", book_date)
         reservation_result = self.reservation_service.submit_reservation(
             captcha_token=captcha_data.token,
             captcha_verification=captcha_result.verification.verify_json,

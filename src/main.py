@@ -1,16 +1,19 @@
 from __future__ import annotations
 
 import logging
+from argparse import Namespace
 from pathlib import Path
 
 from src.api.captcha_api import CaptchaApi
 from src.api.catalog_api import CatalogApi
 from src.api.client import ApiClient
 from src.api.reservation_api import ReservationApi
+from src.cli.commands import get_cmd
 from src.cli.commands import run as run_command
 from src.cli.parser import build_parser
 from src.cli.validators import CliValidationError, validate_and_normalize_args
-from src.config.settings import load_settings
+from src.config.settings import (ApiSettings, AuthSettings, UserSettings,
+                                 load_settings)
 from src.core.captcha_service import CaptchaService
 from src.core.catalog_service import CatalogService
 from src.core.reservation_service import ReservationService
@@ -19,13 +22,15 @@ from src.presenters.format import format_request_result
 from src.utils.crypto_utils import AesCbcEncryptor
 from src.utils.sign_utils import SignBuilder
 
+logger = logging.getLogger(__name__)
+
 
 def _setup_logging() -> None:
     fmt = "%(asctime)s [%(levelname)s] %(message)s"
     datefmt = "%H:%M:%S"
     logging.basicConfig(level=logging.INFO, format=fmt, datefmt=datefmt)
     root = logging.getLogger()
-    log_dir = Path(__file__).resolve().parents[2] / "logs"
+    log_dir = Path(__file__).resolve().parents[1] / "logs"
     log_dir.mkdir(exist_ok=True)
     fh = logging.FileHandler(log_dir / "cgyy.log", encoding="utf-8")
     fh.setLevel(logging.INFO)
@@ -33,12 +38,53 @@ def _setup_logging() -> None:
     root.addHandler(fh)
 
 
-_setup_logging()
-logger = logging.getLogger(__name__)
+def merge_cli_overrides(
+    args: Namespace,
+    api_settings: ApiSettings,
+    user_settings: UserSettings,
+) -> None:
+    """将 CLI 参数合并到 settings 中。优先级：CLI > .env/环境变量 > 默认值。"""
+    cmd = get_cmd(args)
+
+    if args.date:
+        api_settings.default_search_date = args.date
+        user_settings.reservation_date = args.date
+        user_settings.week_start_date = args.date
+
+    if args.start_time:
+        user_settings.reservation_start_time = args.start_time
+    elif cmd in ("info", "reserve"):
+        user_settings.reservation_start_time = ""
+
+    if args.duration is not None:
+        user_settings.reservation_slot_count = args.duration
+    elif cmd in ("info", "reserve"):
+        user_settings.reservation_slot_count = 1
+
+    if args.venue_site_id is not None and args.venue_site_id != -1:
+        api_settings.venue_site_id = args.venue_site_id
+
+    if args.buddies:
+        user_settings.buddy_ids = args.buddies
+
+    if getattr(args, "strategy", None):
+        user_settings.selection_strategy = args.strategy
 
 
-def build_app() -> tuple[ReservationWorkflow, CatalogService]:
-    api_settings, user_settings, auth_settings = load_settings()
+def build_app(
+    api_settings: ApiSettings | None = None,
+    user_settings: UserSettings | None = None,
+    auth_settings: AuthSettings | None = None,
+) -> tuple[ReservationWorkflow, CatalogService]:
+    if api_settings is None or user_settings is None or auth_settings is None:
+        _api, _user, _auth = load_settings()
+        if api_settings is None:
+            api_settings = _api
+        if user_settings is None:
+            user_settings = _user
+        if auth_settings is None:
+            auth_settings = _auth
+
     sign_builder = SignBuilder(prefix=api_settings.prefix)
     client = ApiClient(
         api_settings=api_settings,
@@ -75,21 +121,12 @@ def build_app() -> tuple[ReservationWorkflow, CatalogService]:
     return workflow, catalog_service
 
 
-def build_workflow() -> ReservationWorkflow:
-    """Backward compatible helper used by test_steps."""
-    workflow, _ = build_app()
-    return workflow
-
-
-def _cmd(args) -> str:
-    return getattr(args, "cmd", None) or "reserve"
-
-
 def main() -> None:
+    _setup_logging()
+
     parser = build_parser()
     args = parser.parse_args()
 
-    # 先进行参数规范化与校验，失败则直接返回
     try:
         args = validate_and_normalize_args(args)
     except CliValidationError as e:
@@ -97,29 +134,11 @@ def main() -> None:
         print(format_request_result("参数检查", False, str(e)))
         return
 
-    workflow, catalog_service = build_app()
+    api_settings, user_settings, auth_settings = load_settings()
+    merge_cli_overrides(args, api_settings, user_settings)
+    workflow, catalog_service = build_app(api_settings, user_settings, auth_settings)
 
-    # 本次调用级别的设置覆盖：优先级为 CLI > main 中的设定值 > .env/环境变量 > 默认值
-    if args.date:
-        workflow.api_settings.default_search_date = args.date
-        workflow.user_settings.reservation_date = args.date
-        workflow.user_settings.week_start_date = args.date
-    # -s 不指定时保留空字符串，workflow 视为“返回所有开始时间”的方案
-    if args.start_time:
-        workflow.user_settings.reservation_start_time = args.start_time
-    elif _cmd(args) in ("info", "reserve"):
-        workflow.user_settings.reservation_start_time = ""
-    # -n 不指定时 info/reserve 默认为 1 个时段
-    if args.duration is not None:
-        workflow.user_settings.reservation_duration_hours = args.duration
-    elif _cmd(args) in ("info", "reserve"):
-        workflow.user_settings.reservation_duration_hours = 1
-    if args.venue_site_id is not None and args.venue_site_id != -1:
-        workflow.api_settings.venue_site_id = args.venue_site_id
-    if args.buddies:
-        workflow.user_settings.buddy_ids = args.buddies
-
-    if _cmd(args) in ("order-detail", "cancel-order") and not args.trade_no:
+    if get_cmd(args) in ("order-detail", "cancel-order") and not args.trade_no:
         print("❌ 请指定 --trade-no 订单编号")
         return
 

@@ -19,7 +19,7 @@ class ReservationApi:
     api_settings: ApiSettings
     user_settings: UserSettings
 
-    def get_info(self, search_date: str | None = None, hasReserveInfo: bool = False) -> Dict[str, Any]:
+    def get_info(self, search_date: str | None = None, has_reserve_info: bool = False) -> Dict[str, Any]:
         if search_date is None:
             search_date = self.api_settings.default_search_date
         venue_site_id = self.api_settings.venue_site_id
@@ -31,17 +31,17 @@ class ReservationApi:
             "searchDate": search_date,
             "nocache": ts,
         }
-        if hasReserveInfo:
+        if has_reserve_info:
             params["hasReserveInfo"] = 1
         sign_parts = params_to_sign_parts(params)
         return self.client.get(REL_info, params=params, sign_parts=sign_parts)
 
-    def get_order_info(self, venueTradeNo: str) -> Dict[str, Any]:
+    def get_order_info(self, venue_trade_no: str) -> Dict[str, Any]:
         from src.utils.time_utils import current_timestamp_ms
 
         ts = current_timestamp_ms()
         params = {
-            "venueTradeNo": venueTradeNo,
+            "venueTradeNo": venue_trade_no,
             "nocache": ts,
         }
         sign_parts = params_to_sign_parts(params)
@@ -58,10 +58,9 @@ class ReservationApi:
         sign_parts = params_to_sign_parts(sign_params)
         return self.client.post(REL_SUBMIT, data=payload, sign_parts=sign_parts)
 
-    def cancel_order(self, venueTradeNo: str) -> Dict[str, Any]:
+    def cancel_order(self, venue_trade_no: str) -> Dict[str, Any]:
         params = {
-            "venueTradeNo": venueTradeNo,
-            # "remark": "",
+            "venueTradeNo": venue_trade_no,
         }
         sign_parts = params_to_sign_parts(params)
         return self.client.post(REL_CANCEL, data=params, sign_parts=sign_parts)

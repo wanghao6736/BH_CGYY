@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import List, Optional
 
 from tabulate import tabulate
@@ -10,6 +11,17 @@ from src.parsers.catalog import SiteItem, SportItem
 from src.parsers.day_info import Buddy, SiteParam
 from src.parsers.order import OrderDetailParsed, SubmitParsed
 from src.parsers.slot_filter import SlotSolution
+
+_WEEKDAY_CN = ("星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日")
+
+
+def _date_with_weekday(date_str: str) -> str:
+    """'2026-03-07' -> '2026-03-07 星期六'。解析失败时原样返回。"""
+    try:
+        dt = datetime.strptime(date_str, "%Y-%m-%d")
+        return f"{date_str} {_WEEKDAY_CN[dt.weekday()]}"
+    except (ValueError, IndexError):
+        return date_str
 
 
 def format_site_line(site_param: Optional[SiteParam]) -> str:
@@ -41,7 +53,7 @@ def format_solutions_table(
     site_line = format_site_line(site_param)
     if site_line:
         lines.append(site_line)
-    lines.append(f"📅 预约日期 {date}")
+    lines.append(f"📅 预约日期 {_date_with_weekday(date)}")
     rows = []
     for i, sol in enumerate(solutions, 1):
         for j, c in enumerate(sol.choices):
@@ -51,12 +63,12 @@ def format_solutions_table(
                 f"{c.start_time}-{c.end_time}",
                 f"¥{c.order_fee}",
                 f"¥{sol.total_fee}" if j == 0 else "",
-                f"{sol.duration_hours:.0f}h" if j == 0 else "",
+                f"{sol.slot_count}段/{sol.total_hours:.1f}h" if j == 0 else "",
             ])
     headers = ["📋 方案", "场地", "🕐 时段", "单价", "💰 总价", "时长"]
     table = tabulate(rows, headers=headers, tablefmt="simple", stralign="left")
     lines.append(table)
-    lines.append("💡 默认将使用第 1 个方案下单。")
+    lines.append(f"📊 共 {len(solutions)} 个方案 | 💡 默认将使用第 1 个方案下单。")
     return "\n".join(lines)
 
 
