@@ -7,22 +7,30 @@ results in a human-readable format.
 
 ## Features
 
-- Configurable settings loaded from environment variables or a local file
-- HTTP client with retry support
-- Response parsing utilities and small presenter helpers for terminal output
-- Shell scripts for convenient command-line workflows
+- Configurable settings loaded from environment variables or a local `.env` file
+- HTTP client with automatic retry and request signing
+- Captcha recognition and verification pipeline
+- Pluggable selection strategies for choosing among available options
+- Response parsing utilities and presenter helpers for terminal output
+- Shell scripts for polling workflows and desktop notifications (macOS)
 
 ## Requirements
 
 - Python 3.9+
-- Dependencies listed in `requirements.txt`
+- Dependencies are declared in `pyproject.toml`
 
 ## Installation
 
-Install the required dependencies:
+Install the project and its dependencies (editable mode recommended for development):
 
 ```bash
-pip install -r requirements.txt
+pip install -e .
+```
+
+Or install directly:
+
+```bash
+pip install .
 ```
 
 ## Usage
@@ -33,13 +41,35 @@ Run the main entry point:
 python -m src.main
 ```
 
-You can pass additional command-line arguments to adjust behavior; run:
+Or, if installed via `pip install`:
 
 ```bash
-python -m src.main --help
+cgyy
 ```
 
-for an overview of available options.
+Pass `--help` for an overview of available sub-commands and options:
+
+```bash
+cgyy --help
+```
+
+See [`docs/README.md`](docs/README.md) for detailed configuration and usage instructions.
+
+## Project Structure
+
+```
+src/
+├── api/           # HTTP client and API endpoint wrappers
+├── cli/           # Argument parsing, validation, and command dispatch
+├── config/        # Settings loaded from environment / .env
+├── core/          # Business logic, workflows, and strategies
+├── parsers/       # Pure-function JSON response parsers
+├── presenters/    # Human-readable terminal output formatters
+├── utils/         # Cryptography, signing, OCR, and time helpers
+└── tests/         # Parser tests and manual integration test scripts
+scripts/           # Shell helpers for polling and notifications
+docs/              # Detailed documentation and sample API responses
+```
 
 ## License
 

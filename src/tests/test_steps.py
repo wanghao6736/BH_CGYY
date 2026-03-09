@@ -22,11 +22,11 @@ import random
 import time
 
 from src.config.settings import load_settings
-from src.main import build_workflow
+from src.main import build_app
 
 
 def step_fetch_captcha() -> None:
-    workflow = build_workflow()
+    workflow, _ = build_app()
     captcha_data = workflow.captcha_service.fetch_captcha()
     print("secret_key:", captcha_data.secret_key)
     print("token:", captcha_data.token)
@@ -36,7 +36,7 @@ def step_fetch_captcha() -> None:
 
 def step_verify_captcha() -> None:
     api_settings, _, _ = load_settings()
-    workflow = build_workflow()
+    workflow, _ = build_app()
     captcha_data = workflow.captcha_service.fetch_captcha()
     time.sleep(random.uniform(api_settings.captcha_delay_min, api_settings.captcha_delay_max))
     result = workflow.captcha_service.verify_captcha(captcha_data)
@@ -47,27 +47,27 @@ def step_verify_captcha() -> None:
 
 
 def step_info() -> None:
-    workflow = build_workflow()
-    slots = workflow.reservation_service.get_available_slots()
-    data = slots.get("data", {})
-    order_params = data.get("orderParamView", {})
-    print("day info raw response:")
-    print(order_params)
+    workflow, _ = build_app()
+    success, message, slots = workflow.reservation_service.get_info_parsed()
+    print("day info success:", success)
+    print("day info message:", message)
+    print("day info slots:", slots)
 
 
 def step_order_detail() -> None:
-    workflow = build_workflow()
-    result = workflow.reservation_service.get_order_detail("D260306000729")
-    print("order detail raw response:")
-    print(result)
+    workflow, _ = build_app()
+    success, message, order_detail = workflow.reservation_service.get_order_detail_parsed("D260306000729")
+    print("order detail success:", success)
+    print("order detail message:", message)
+    print("order detail order_detail:", order_detail)
 
 
 def step_full() -> None:
-    workflow = build_workflow()
-    result = workflow.run_full_reservation()
-    print("captcha success:", result.captcha.success, result.captcha.message)
-    print("reservation success:", result.reservation.success, result.reservation.message)
-    print("reservation raw response:", result.reservation.raw)
+    workflow, _ = build_app()
+    success, message, submit = workflow.reservation_service.submit_reservation()
+    print("submit success:", success)
+    print("submit message:", message)
+    print("submit submit:", submit)
 
 
 def main() -> None:

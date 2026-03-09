@@ -5,7 +5,6 @@
 """
 
 import json
-import sys
 from pathlib import Path
 
 try:
@@ -14,8 +13,7 @@ try:
     import numpy as np
     from PIL import Image, ImageDraw
 except ImportError as e:
-    print(f"❌ 缺少依赖：{e}")
-    sys.exit(1)
+    raise ImportError(f"❌ CharLocator 缺少依赖：{e}")
 
 
 class CharLocator:

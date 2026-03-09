@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import time
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, Optional
@@ -9,6 +10,8 @@ import requests
 from src.config.settings import ApiSettings, AuthSettings
 from src.utils.sign_utils import SignBuilder
 from src.utils.time_utils import current_timestamp_ms
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -44,17 +47,25 @@ class ApiClient:
         return self.sign_builder.build(rel_path, extended_parts)
 
     def _request_with_retry(self, method: str, url: str, **kwargs: Any) -> requests.Response:
-        last_exc = None
-        for attempt in range(self.retry_count):
+        attempts = max(self.retry_count, 1)
+        last_exc: Exception | None = None
+        for attempt in range(attempts):
             try:
                 resp = self._session.request(method, url, **kwargs)
                 resp.raise_for_status()
                 return resp
-            except (requests.RequestException, requests.HTTPError) as e:
+            except requests.HTTPError as e:
+                status = e.response.status_code if e.response is not None else 0
+                if 400 <= status < 500:
+                    logger.warning("HTTP %d (不可重试): %s %s", status, method.upper(), url)
+                    raise
                 last_exc = e
-                if attempt < self.retry_count - 1:
-                    time.sleep(self.retry_interval_sec)
-        raise last_exc
+            except requests.RequestException as e:
+                last_exc = e
+            if attempt < attempts - 1:
+                logger.info("请求失败，%0.1fs 后重试 (%d/%d)", self.retry_interval_sec, attempt + 1, attempts)
+                time.sleep(self.retry_interval_sec)
+        raise last_exc or RuntimeError(f"请求失败: {method.upper()} {url}")
 
     def get(
         self,

@@ -9,12 +9,14 @@ from pathlib import Path
 from typing import Dict, List
 
 from src.api.captcha_api import CaptchaApi
-from src.utils.char_locator import CharLocator, draw_boxes_with_chars
+from src.core.exceptions import CaptchaError
 from src.parsers.captcha import (parse_captcha_response,
                                  parse_check_captcha_response)
+from src.utils.char_locator import CharLocator, draw_boxes_with_chars
 from src.utils.crypto_utils import AesEcbEncryptor
 
 CAPTCHA_DIR = Path("CAPTCHA")
+CAPTCHA_W, CAPTCHA_H = 310, 155
 
 
 @dataclass
@@ -46,7 +48,7 @@ class CaptchaService:
         resp = self.api.get_captcha_raw()
         success, message, parsed = parse_captcha_response(resp)
         if not parsed:
-            raise RuntimeError(f"解析验证码失败: {message}")
+            raise CaptchaError(f"解析验证码失败: {message}")
         image_path = self._decode_and_save_image(parsed.original_image_base64)
         return CaptchaData(
             secret_key=parsed.secret_key,
@@ -77,7 +79,7 @@ class CaptchaService:
             result.get("target_bbox"),
         )
         if not result["success"] or result["found_count"] != len(target_chars):
-            raise RuntimeError("未能识别全部目标字符")
+            raise CaptchaError("未能识别全部目标字符")
         check_pos_arr: List[Dict[str, int]] = []
         for fc in result["found_chars"]:
             x1, y1, x2, y2 = fc["bbox"]
@@ -87,8 +89,8 @@ class CaptchaService:
             offset_x = random.uniform(-0.1 * w, 0.1 * w)
             offset_y = random.uniform(-0.1 * h, 0.1 * h)
             imgw, imgh = result["image_size"]["width"], result["image_size"]["height"]
-            sx = 310 * (cx + offset_x) / imgw
-            sy = 155 * (cy + offset_y) / imgh
+            sx = CAPTCHA_W * (cx + offset_x) / imgw
+            sy = CAPTCHA_H * (cy + offset_y) / imgh
             check_pos_arr.append(
                 {
                     "x": int(round(sx)),

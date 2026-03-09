@@ -5,6 +5,8 @@ import logging
 from argparse import Namespace
 from typing import TYPE_CHECKING
 
+from src.core.exceptions import (BuddyConfigError, CaptchaError, CgyyError,
+                                 QueryError)
 from src.presenters.format import (format_buddy_list,
                                    format_catalog_sites_table,
                                    format_catalog_sports_table,
@@ -19,13 +21,18 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def get_cmd(args: Namespace) -> str:
+    """从 argparse 结果中取子命令名，默认 'reserve'。"""
+    return getattr(args, "cmd", None) or "reserve"
+
+
 def run(
     workflow: "ReservationWorkflow",
     catalog_service: "CatalogService",
     args: Namespace,
 ) -> None:
     """根据 args.cmd 分发到对应子命令。"""
-    cmd = getattr(args, "cmd", None) or "reserve"
+    cmd = get_cmd(args)
     if cmd == "catalog":
         run_catalog(workflow, catalog_service, args)
     elif cmd == "fetch-captcha":
@@ -101,7 +108,7 @@ def run_info(workflow: "ReservationWorkflow", args: Namespace) -> None:
             ReservationQuery(
                 date=workflow.api_settings.default_search_date,
                 start_time=args.start_time,
-                duration_hours=workflow.user_settings.reservation_duration_hours,
+                slot_count=workflow.user_settings.reservation_slot_count,
                 show_order_param=args.show_order_param,
             )
         )
@@ -112,8 +119,8 @@ def run_info(workflow: "ReservationWorkflow", args: Namespace) -> None:
             print(format_solutions_table(solutions, book_date, info.site_param))
         else:
             st = args.start_time or "任意"
-            print(f"   📋 {book_date} {st} 起 {workflow.user_settings.reservation_duration_hours} 时段暂无可用方案。")
-    except RuntimeError as e:
+            print(f"   📋 {book_date} {st} 起 {workflow.user_settings.reservation_slot_count} 时段暂无可用方案。")
+    except CgyyError as e:
         print(format_request_result("查询场地信息", False, str(e)))
     except Exception as e:
         logger.exception("查询场地信息失败")
@@ -142,6 +149,29 @@ def run_cancel_order(workflow: "ReservationWorkflow", args: Namespace) -> None:
         print(format_request_result("取消订单", False, str(e)))
 
 
+def _print_reserve_hints(exc: Exception) -> None:
+    """根据异常类型给出可执行的下一步建议。"""
+    hints: list[str] = []
+    if isinstance(exc, BuddyConfigError):
+        hints.append("请在 .env 中配置 CGYY_BUDDY_IDS（逗号分隔的同伴 id）")
+        hints.append("查看可选同伴：python -m src.main info --show-order-param")
+    elif isinstance(exc, QueryError):
+        hints.append("尝试其他日期：python -m src.main reserve -d YYYY-MM-DD")
+        hints.append("尝试其他时段：python -m src.main reserve -s HH:MM")
+        hints.append("查看当前空闲：python -m src.main info -d YYYY-MM-DD")
+    elif isinstance(exc, CaptchaError):
+        hints.append("验证码识别可能不稳定，请直接重试")
+    else:
+        low = str(exc).lower()
+        if "cookie" in low or "authorization" in low or "401" in str(exc) or "403" in str(exc):
+            hints.append("登录凭证可能过期，请更新 .env 中的 CGYY_COOKIE 和 CGYY_CG_AUTHORIZATION")
+    if not hints:
+        hints.append("查看帮助：python -m src.main --help")
+    print("\n💡 下一步建议：")
+    for h in hints:
+        print(f"   → {h}")
+
+
 def run_reserve(workflow: "ReservationWorkflow", args: Namespace) -> None:
     try:
         logger.info("查询可预约场地…")
@@ -149,23 +179,19 @@ def run_reserve(workflow: "ReservationWorkflow", args: Namespace) -> None:
         if result.solutions:
             date_str = result.reservation_date or workflow.api_settings.default_search_date
             print(format_solutions_table(result.solutions, date_str, result.site_param))
-        cap_msg = result.captcha.message or ""
-        if not result.captcha.success and cap_msg and not cap_msg.startswith("CAPTCHA:"):
-            cap_msg = f"CAPTCHA: {cap_msg}"
-        print(format_request_result("验证码校验", result.captcha.success, cap_msg))
-        sub_msg = result.reservation.message or ""
-        if not result.reservation.success and sub_msg and not sub_msg.startswith("SUBMIT:"):
-            sub_msg = f"SUBMIT: {sub_msg}"
+        print(format_request_result("验证码校验", result.captcha.success, result.captcha.message or ""))
         print(
             format_submit_result(
                 result.reservation.success,
-                sub_msg,
+                result.reservation.message or "",
                 result.reservation.submit_parsed,
             )
         )
-    except RuntimeError as e:
+    except CgyyError as e:
         logger.error(str(e))
         print(format_request_result("预约流程", False, str(e)))
+        _print_reserve_hints(e)
     except Exception as e:
         logger.exception("预约失败")
         print(format_request_result("预约流程", False, str(e)))
+        _print_reserve_hints(e)
