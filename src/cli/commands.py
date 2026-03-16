@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import logging
 from argparse import Namespace
+from datetime import datetime
 from typing import TYPE_CHECKING
 
+from src.auth.manager import AuthManager
 from src.core.exceptions import (BuddyConfigError, CaptchaError, CgyyError,
                                  QueryError)
 from src.presenters.format import (format_buddy_list,
@@ -27,8 +29,9 @@ def get_cmd(args: Namespace) -> str:
 
 
 def run(
-    workflow: "ReservationWorkflow",
-    catalog_service: "CatalogService",
+    workflow: "ReservationWorkflow | None",
+    catalog_service: "CatalogService | None",
+    auth_manager: AuthManager,
     args: Namespace,
 ) -> None:
     """根据 args.cmd 分发到对应子命令。"""
@@ -45,16 +48,24 @@ def run(
         run_order_detail(workflow, args)
     elif cmd == "cancel-order":
         run_cancel_order(workflow, args)
+    elif cmd == "login":
+        run_login(auth_manager)
+    elif cmd == "auth-status":
+        run_auth_status(auth_manager)
+    elif cmd == "logout":
+        run_logout(auth_manager)
     else:
         run_reserve(workflow, args)
 
 
 def run_catalog(
-    workflow: "ReservationWorkflow",
-    catalog_service: "CatalogService",
+    workflow: "ReservationWorkflow | None",
+    catalog_service: "CatalogService | None",
     args: Namespace,
 ) -> None:
     try:
+        if workflow is None or catalog_service is None:
+            raise RuntimeError("应用未初始化")
         logger.info("查询场地目录…")
         ok, msg, parsed = catalog_service.get_catalog_parsed()
         print(format_request_result("场地目录", ok, msg))
@@ -72,6 +83,8 @@ def run_catalog(
 
 def run_fetch_captcha(workflow: "ReservationWorkflow") -> None:
     try:
+        if workflow is None:
+            raise RuntimeError("应用未初始化")
         logger.info("获取验证码…")
         captcha_data = workflow.captcha_service.fetch_captcha()
         print(format_request_result("获取验证码", True))
@@ -88,6 +101,8 @@ def run_verify_captcha(workflow: "ReservationWorkflow") -> None:
     import time
 
     try:
+        if workflow is None:
+            raise RuntimeError("应用未初始化")
         logger.info("获取验证码…")
         captcha_data = workflow.captcha_service.fetch_captcha()
         print(format_request_result("获取验证码", True))
@@ -104,6 +119,8 @@ def run_info(workflow: "ReservationWorkflow", args: Namespace) -> None:
     from src.core.workflow import ReservationQuery
 
     try:
+        if workflow is None:
+            raise RuntimeError("应用未初始化")
         info, book_date, solutions = workflow.get_solutions(
             ReservationQuery(
                 date=workflow.api_settings.default_search_date,
@@ -129,6 +146,8 @@ def run_info(workflow: "ReservationWorkflow", args: Namespace) -> None:
 
 def run_order_detail(workflow: "ReservationWorkflow", args: Namespace) -> None:
     try:
+        if workflow is None:
+            raise RuntimeError("应用未初始化")
         logger.info("查询订单详情 trade_no=%s", args.trade_no)
         ok, msg, parsed = workflow.reservation_service.get_order_detail_parsed(args.trade_no)
         print(format_request_result("查询订单详情", ok, msg))
@@ -141,6 +160,8 @@ def run_order_detail(workflow: "ReservationWorkflow", args: Namespace) -> None:
 
 def run_cancel_order(workflow: "ReservationWorkflow", args: Namespace) -> None:
     try:
+        if workflow is None:
+            raise RuntimeError("应用未初始化")
         logger.info("取消订单 trade_no=%s", args.trade_no)
         ok, msg = workflow.reservation_service.cancel_order_parsed(args.trade_no)
         print(format_request_result("取消订单", ok, msg))
@@ -164,7 +185,7 @@ def _print_reserve_hints(exc: Exception) -> None:
     else:
         low = str(exc).lower()
         if "cookie" in low or "authorization" in low or "401" in str(exc) or "403" in str(exc):
-            hints.append("登录凭证可能过期，请更新 .env 中的 CGYY_COOKIE 和 CGYY_CG_AUTHORIZATION")
+            hints.append("登录凭证可能过期，请更新 .env 中的 CGYY_COOKIE 和 CGYY_CG_AUTH")
     if not hints:
         hints.append("查看帮助：python -m src.main --help")
     print("\n💡 下一步建议：")
@@ -174,6 +195,8 @@ def _print_reserve_hints(exc: Exception) -> None:
 
 def run_reserve(workflow: "ReservationWorkflow", args: Namespace) -> None:
     try:
+        if workflow is None:
+            raise RuntimeError("应用未初始化")
         logger.info("查询可预约场地…")
         result = workflow.run_full_reservation()
         if result.solutions:
@@ -195,3 +218,48 @@ def run_reserve(workflow: "ReservationWorkflow", args: Namespace) -> None:
         logger.exception("预约失败")
         print(format_request_result("预约流程", False, str(e)))
         _print_reserve_hints(e)
+
+
+def run_login(auth_manager: AuthManager) -> None:
+    try:
+        result = auth_manager.ensure_cgyy_auth()
+        state = result.state
+        source = state.source if state else "-"
+        print(format_request_result("认证登录", True, f"认证可用，source={source}"))
+        if state:
+            print(f"   🍪 cookie: {'已获取' if state.cookie else '未获取'}")
+            print(f"   🔑 cgAuthorization: {'已获取' if state.cg_authorization else '未获取'}")
+    except Exception as e:
+        logger.exception("认证登录失败")
+        print(format_request_result("认证登录", False, str(e)))
+
+
+def run_auth_status(auth_manager: AuthManager) -> None:
+    try:
+        result = auth_manager.get_cgyy_auth_status()
+        state = result.state
+        ok = bool(state and state.cookie and state.cg_authorization and result.reused)
+        msg = "当前 .env 鉴权可用" if ok else "当前 .env 鉴权缺失或已失效"
+        print(format_request_result("认证状态", ok, msg))
+        if state:
+            obtained = "-"
+            if state.obtained_at:
+                obtained = datetime.fromtimestamp(state.obtained_at).strftime("%Y-%m-%d %H:%M:%S")
+            print(f"   🪪 source: {state.source or '-'}")
+            print(f"   🕒 obtained_at: {obtained}")
+            print(f"   🍪 cookie: {'已配置' if state.cookie else '缺失'}")
+            print(f"   🔑 cgAuthorization: {'已配置' if state.cg_authorization else '缺失'}")
+        if not ok:
+            print("   💡 可执行 `python -m src.main login` 自动刷新鉴权信息。")
+    except Exception as e:
+        logger.exception("查询认证状态失败")
+        print(format_request_result("认证状态", False, str(e)))
+
+
+def run_logout(auth_manager: AuthManager) -> None:
+    try:
+        auth_manager.clear_cgyy_auth()
+        print(format_request_result("清理认证", True, "已清空 .env 中的 CGYY_COOKIE / CGYY_CG_AUTH"))
+    except Exception as e:
+        logger.exception("清理认证缓存失败")
+        print(format_request_result("清理认证", False, str(e)))

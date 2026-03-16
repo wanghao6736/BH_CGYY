@@ -35,7 +35,7 @@ def step_fetch_captcha() -> None:
 
 
 def step_verify_captcha() -> None:
-    api_settings, _, _ = load_settings()
+    api_settings, _, _, _ = load_settings()
     workflow, _ = build_app()
     captcha_data = workflow.captcha_service.fetch_captcha()
     time.sleep(random.uniform(api_settings.captcha_delay_min, api_settings.captcha_delay_max))
