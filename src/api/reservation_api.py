@@ -4,13 +4,9 @@ from dataclasses import dataclass
 from typing import Any, Dict
 
 from src.api.client import ApiClient
+from src.api.endpoints import CgyyEndpoints
 from src.config.settings import ApiSettings, UserSettings
 from src.utils.sign_utils import params_to_sign_parts
-
-REL_info = "/api/reservation/day/info"
-REL_SUBMIT = "/api/reservation/order/submit"
-REL_DETAIL = "/api/venue/finances/order/detail"
-REL_CANCEL = "/api/venue/finances/order/cancel"
 
 
 @dataclass
@@ -34,7 +30,7 @@ class ReservationApi:
         if has_reserve_info:
             params["hasReserveInfo"] = 1
         sign_parts = params_to_sign_parts(params)
-        return self.client.get(REL_info, params=params, sign_parts=sign_parts)
+        return self.client.get(CgyyEndpoints.RESERVATION_DAY_INFO, params=params, sign_parts=sign_parts)
 
     def get_order_info(self, venue_trade_no: str) -> Dict[str, Any]:
         from src.utils.time_utils import current_timestamp_ms
@@ -45,7 +41,7 @@ class ReservationApi:
             "nocache": ts,
         }
         sign_parts = params_to_sign_parts(params)
-        return self.client.get(REL_DETAIL, params=params, sign_parts=sign_parts)
+        return self.client.get(CgyyEndpoints.ORDER_DETAIL, params=params, sign_parts=sign_parts)
 
     def submit_order(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         sign_keys = [
@@ -56,11 +52,11 @@ class ReservationApi:
         # buddyIds 在部分场地（buddyNumMin==0）可能不需要传，此时不参与签名
         sign_params = {k: payload[k] for k in sign_keys if k in payload}
         sign_parts = params_to_sign_parts(sign_params)
-        return self.client.post(REL_SUBMIT, data=payload, sign_parts=sign_parts)
+        return self.client.post(CgyyEndpoints.RESERVATION_SUBMIT, data=payload, sign_parts=sign_parts)
 
     def cancel_order(self, venue_trade_no: str) -> Dict[str, Any]:
         params = {
             "venueTradeNo": venue_trade_no,
         }
         sign_parts = params_to_sign_parts(params)
-        return self.client.post(REL_CANCEL, data=params, sign_parts=sign_parts)
+        return self.client.post(CgyyEndpoints.ORDER_CANCEL, data=params, sign_parts=sign_parts)

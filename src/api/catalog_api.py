@@ -4,10 +4,9 @@ from dataclasses import dataclass
 from typing import Any, Dict
 
 from src.api.client import ApiClient
+from src.api.endpoints import CgyyEndpoints
 from src.utils.sign_utils import params_to_sign_parts
 from src.utils.time_utils import current_timestamp_ms
-
-REL_WEBSITE_INIT = "/api/front/website/init"
 
 
 @dataclass
@@ -26,4 +25,4 @@ class CatalogApi:
             "nocache": ts,
         }
         sign_parts = params_to_sign_parts(params)
-        return self.client.get(REL_WEBSITE_INIT, params=params, sign_parts=sign_parts)
+        return self.client.get(CgyyEndpoints.WEBSITE_INIT, params=params, sign_parts=sign_parts)

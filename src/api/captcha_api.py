@@ -5,11 +5,10 @@ from dataclasses import dataclass
 from typing import Any, Dict
 
 from src.api.client import ApiClient
+from src.api.endpoints import CgyyEndpoints
 from src.utils.sign_utils import params_to_sign_parts
 from src.utils.time_utils import current_timestamp_ms
 
-REL_GET = "/api/captcha/get"
-REL_CHECK = "/api/captcha/check"
 CAPTCHA_TYPE = "clickWord"
 
 
@@ -30,7 +29,7 @@ class CaptchaApi:
             "ts": ts,
         }
         sign_parts = params_to_sign_parts(params)
-        return self.client.get(REL_GET, params=params, sign_parts=sign_parts)
+        return self.client.get(CgyyEndpoints.CAPTCHA_GET, params=params, sign_parts=sign_parts)
 
     def check_captcha(self, point_json: str, token: str) -> Dict[str, Any]:
         data = {
@@ -39,4 +38,4 @@ class CaptchaApi:
             "token": token,
         }
         sign_parts = params_to_sign_parts(data)
-        return self.client.post(REL_CHECK, data=data, sign_parts=sign_parts)
+        return self.client.post(CgyyEndpoints.CAPTCHA_CHECK, data=data, sign_parts=sign_parts)
