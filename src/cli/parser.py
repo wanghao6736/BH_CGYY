@@ -1,4 +1,4 @@
-"""CGYY CLI 参数解析。子命令：reserve（默认）, info, catalog, fetch-captcha, verify-captcha, order-detail, cancel-order。"""
+"""CGYY CLI 参数解析。子命令：reserve（默认）, info, catalog, fetch-captcha, verify-captcha, order-detail, cancel-order, login, auth-status, logout。"""
 from __future__ import annotations
 
 import argparse
@@ -83,6 +83,9 @@ def build_parser() -> argparse.ArgumentParser:
         ("verify-captcha", "识别并校验验证码"),
         ("order-detail", "查询订单详情"),
         ("cancel-order", "取消订单"),
+        ("login", "执行 SSO 自动登录并刷新 .env 鉴权信息"),
+        ("auth-status", "查看当前 .env 鉴权状态"),
+        ("logout", "清空 .env 中的鉴权信息"),
     ]:
         subp = sub.add_parser(name, help=help_text)
         _add_common_options(subp)

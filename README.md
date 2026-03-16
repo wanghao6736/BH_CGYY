@@ -1,18 +1,17 @@
-## Overview
+# Overview
 
-This repository contains a small command-line utility written in Python.
-It provides a simple interface to interact with a remote HTTP-based service
-and offers basic helpers for configuration, parsing responses, and displaying
-results in a human-readable format.
+This repository contains a Python command-line application for interacting with
+an external web service through a layered architecture. It combines typed
+configuration loading, authenticated HTTP flows, response parsing, workflow
+orchestration, and terminal-oriented output.
 
-## Features
+## Highlights
 
-- Configurable settings loaded from environment variables or a local `.env` file
-- HTTP client with automatic retry and request signing
-- Captcha recognition and verification pipeline
-- Pluggable selection strategies for choosing among available options
-- Response parsing utilities and presenter helpers for terminal output
-- Shell scripts for polling workflows and desktop notifications (macOS)
+- Configuration loaded from `.env` and environment variables through a unified store
+- Layered HTTP clients for signed API requests and SSO page flows
+- Authentication pipeline with automatic refresh and `.env` persistence
+- Parsing, workflow, and presentation layers kept separate
+- Command-line entry points plus helper shell scripts for repeated execution
 
 ## Requirements
 
@@ -21,7 +20,7 @@ results in a human-readable format.
 
 ## Installation
 
-Install the project and its dependencies (editable mode recommended for development):
+Install the project and its dependencies:
 
 ```bash
 pip install -e .
@@ -41,34 +40,37 @@ Run the main entry point:
 python -m src.main
 ```
 
-Or, if installed via `pip install`:
+Or, if installed:
 
 ```bash
 cgyy
 ```
 
-Pass `--help` for an overview of available sub-commands and options:
+Pass `--help` for the available commands:
 
 ```bash
 cgyy --help
 ```
 
-See [`docs/README.md`](docs/README.md) for detailed configuration and usage instructions.
+See [`docs/README.md`](docs/README.md) for the detailed project guide.
 
 ## Project Structure
 
-```
+```text
 src/
-├── api/           # HTTP client and API endpoint wrappers
+├── api/           # Endpoint definitions and API wrappers
+├── auth/          # Service auth state and business token exchange
 ├── cli/           # Argument parsing, validation, and command dispatch
-├── config/        # Settings loaded from environment / .env
-├── core/          # Business logic, workflows, and strategies
-├── parsers/       # Pure-function JSON response parsers
-├── presenters/    # Human-readable terminal output formatters
-├── utils/         # Cryptography, signing, OCR, and time helpers
-└── tests/         # Parser tests and manual integration test scripts
-scripts/           # Shell helpers for polling and notifications
-docs/              # Detailed documentation and sample API responses
+├── config/        # Typed settings and .env read/write helpers
+├── core/          # Domain workflows and selection strategies
+├── http/          # Shared HTTP transport helpers
+├── parsers/       # Pure response parsers
+├── presenters/    # Terminal formatting helpers
+├── sso/           # SSO page flow and service adapters
+├── tests/         # Automated tests
+└── utils/         # Shared utilities
+scripts/           # Shell helpers
+docs/              # Detailed documentation
 ```
 
 ## License
