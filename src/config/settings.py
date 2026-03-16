@@ -1,8 +1,8 @@
-import os
 from dataclasses import dataclass
 from datetime import date
-from pathlib import Path
 from typing import Tuple
+
+from src.config.env_store import EnvStore
 
 
 def _today_str() -> str:
@@ -52,67 +52,66 @@ class AuthSettings:
     cg_authorization: str = ""
 
 
-def _load_dotenv_if_exists() -> None:
-    """
-    从项目根目录的 .env 加载环境变量（KEY=VALUE 形式，# 开头为注释）
-    """
-    root = Path(__file__).resolve().parents[2]
-    env_path = root / ".env"
-    if not env_path.exists():
-        return
-
-    for line in env_path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        key = key.strip()
-        value = value.strip()
-        if key and key not in os.environ:
-            os.environ[key] = value
+@dataclass
+class SsoSettings:
+    enabled: bool = False
+    login_base_url: str = ""
+    service_url: str = ""
+    username: str = ""
+    password: str = ""
+    max_redirects: int = 10
+    timeout_sec: float = 10.0
+    persist_to_env: bool = True
 
 
-def load_settings() -> Tuple[ApiSettings, UserSettings, AuthSettings]:
-    # 优先从 .env 加载，再读取 os.environ
-    _load_dotenv_if_exists()
+def load_settings() -> Tuple[ApiSettings, UserSettings, AuthSettings, SsoSettings]:
+    env = EnvStore()
 
     api = ApiSettings(
-        base_url=os.getenv("CGYY_BASE_URL", ApiSettings.base_url),
-        prefix=os.getenv("CGYY_PREFIX", ApiSettings.prefix),
-        app_key=os.getenv("CGYY_APP_KEY", ApiSettings.app_key),
-        venue_site_id=int(os.getenv("CGYY_VENUE_SITE_ID", str(ApiSettings.venue_site_id))),
-        default_search_date=os.getenv("CGYY_DEFAULT_SEARCH_DATE", ApiSettings.default_search_date),
-        aes_cbc_key=os.getenv("CGYY_AES_CBC_KEY", ApiSettings.aes_cbc_key),
-        aes_cbc_iv=os.getenv("CGYY_AES_CBC_IV", ApiSettings.aes_cbc_iv),
-        captcha_delay_min=float(os.getenv("CGYY_CAPTCHA_DELAY_MIN", str(ApiSettings.captcha_delay_min))),
-        captcha_delay_max=float(os.getenv("CGYY_CAPTCHA_DELAY_MAX", str(ApiSettings.captcha_delay_max))),
-        retry_count=int(os.getenv("CGYY_RETRY_COUNT", str(ApiSettings.retry_count))),
-        retry_interval_sec=float(os.getenv("CGYY_RETRY_INTERVAL_SEC", str(ApiSettings.retry_interval_sec))),
+        base_url=env.get_str("CGYY_BASE_URL", ApiSettings.base_url),
+        prefix=env.get_str("CGYY_PREFIX", ApiSettings.prefix),
+        app_key=env.get_str("CGYY_APP_KEY", ApiSettings.app_key),
+        venue_site_id=env.get_int("CGYY_VENUE_SITE_ID", ApiSettings.venue_site_id),
+        default_search_date=env.get_str("CGYY_DEFAULT_SEARCH_DATE", ApiSettings.default_search_date),
+        aes_cbc_key=env.get_str("CGYY_AES_CBC_KEY", ApiSettings.aes_cbc_key),
+        aes_cbc_iv=env.get_str("CGYY_AES_CBC_IV", ApiSettings.aes_cbc_iv),
+        captcha_delay_min=env.get_float("CGYY_CAPTCHA_DELAY_MIN", ApiSettings.captcha_delay_min),
+        captcha_delay_max=env.get_float("CGYY_CAPTCHA_DELAY_MAX", ApiSettings.captcha_delay_max),
+        retry_count=env.get_int("CGYY_RETRY_COUNT", ApiSettings.retry_count),
+        retry_interval_sec=env.get_float("CGYY_RETRY_INTERVAL_SEC", ApiSettings.retry_interval_sec),
     )
     user = UserSettings(
-        phone=os.getenv("CGYY_PHONE", UserSettings.phone),
-        buddy_ids=os.getenv("CGYY_BUDDY_IDS", UserSettings.buddy_ids),
+        phone=env.get_str("CGYY_PHONE", UserSettings.phone),
+        buddy_ids=env.get_str("CGYY_BUDDY_IDS", UserSettings.buddy_ids),
         reservation_date=_today_str(),
-        reservation_order_json=os.getenv(
+        reservation_order_json=env.get_str(
             "CGYY_RESERVATION_ORDER_JSON", UserSettings.reservation_order_json
         ),
-        reservation_type=os.getenv("CGYY_RESERVATION_TYPE", UserSettings.reservation_type),
+        reservation_type=env.get_str("CGYY_RESERVATION_TYPE", UserSettings.reservation_type),
         week_start_date=api.default_search_date or _today_str(),
-        reservation_start_time=os.getenv("CGYY_RESERVATION_START_TIME", UserSettings.reservation_start_time),
-        reservation_slot_count=int(
-            os.getenv(
-                "CGYY_RESERVATION_SLOT_COUNT", str(
-                    UserSettings.reservation_slot_count))),
-        order_pin_x_min=int(os.getenv("CGYY_ORDER_PIN_X_MIN", UserSettings.order_pin_x_min)),
-        order_pin_x_max=int(os.getenv("CGYY_ORDER_PIN_X_MAX", UserSettings.order_pin_x_max)),
-        order_pin_y_min=int(os.getenv("CGYY_ORDER_PIN_Y_MIN", UserSettings.order_pin_y_min)),
-        order_pin_y_max=int(os.getenv("CGYY_ORDER_PIN_Y_MAX", UserSettings.order_pin_y_max)),
+        reservation_start_time=env.get_str("CGYY_RESERVATION_START_TIME", UserSettings.reservation_start_time),
+        reservation_slot_count=env.get_int(
+            "CGYY_RESERVATION_SLOT_COUNT", UserSettings.reservation_slot_count),
+        order_pin_x_min=env.get_int("CGYY_ORDER_PIN_X_MIN", UserSettings.order_pin_x_min),
+        order_pin_x_max=env.get_int("CGYY_ORDER_PIN_X_MAX", UserSettings.order_pin_x_max),
+        order_pin_y_min=env.get_int("CGYY_ORDER_PIN_Y_MIN", UserSettings.order_pin_y_min),
+        order_pin_y_max=env.get_int("CGYY_ORDER_PIN_Y_MAX", UserSettings.order_pin_y_max),
         order_price=UserSettings.order_price,
-        selection_strategy=os.getenv(
+        selection_strategy=env.get_str(
             "CGYY_SELECTION_STRATEGY", UserSettings.selection_strategy
         ),
     )
-    cookie = os.getenv("CGYY_COOKIE", AuthSettings.cookie)
-    cg_auth = os.getenv("CGYY_CG_AUTH", AuthSettings.cg_authorization)
+    cookie = env.get_str("CGYY_COOKIE", AuthSettings.cookie)
+    cg_auth = env.get_str("CGYY_CG_AUTH", AuthSettings.cg_authorization)
     auth = AuthSettings(cookie=cookie, cg_authorization=cg_auth)
-    return api, user, auth
+    sso = SsoSettings(
+        enabled=env.get_bool("CGYY_SSO_ENABLED", SsoSettings.enabled),
+        login_base_url=env.get_str("CGYY_SSO_LOGIN_URL", SsoSettings.login_base_url),
+        service_url=env.get_str("CGYY_SSO_SERVICE_URL", SsoSettings.service_url),
+        username=env.get_str("CGYY_SSO_USERNAME", SsoSettings.username),
+        password=env.get_str("CGYY_SSO_PASSWORD", SsoSettings.password),
+        max_redirects=env.get_int("CGYY_SSO_MAX_REDIRECTS", SsoSettings.max_redirects),
+        timeout_sec=env.get_float("CGYY_SSO_TIMEOUT_SEC", SsoSettings.timeout_sec),
+        persist_to_env=env.get_bool("CGYY_AUTH_PERSIST_TO_ENV", SsoSettings.persist_to_env),
+    )
+    return api, user, auth, sso
