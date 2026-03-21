@@ -2,6 +2,7 @@ from pathlib import Path
 
 from src.auth.manager import AuthManager
 from src.auth.models import ServiceAuthState
+from src.config.env_store import ENC_PREFIX
 from src.config.profiles import ProfileManager, build_env_store
 from src.config.settings import ApiSettings, AuthSettings, SsoSettings, load_settings
 
@@ -77,6 +78,30 @@ def test_profile_manager_show_masks_sensitive_values(tmp_path: Path) -> None:
     assert values["CGYY_SSO_PASSWORD"].sensitive is True
     assert values["CGYY_SSO_PASSWORD"].value != "secret-password"
     assert values["CGYY_SSO_PASSWORD"].source == "self"
+
+
+def test_profile_manager_inspection_works_without_cred_key(tmp_path: Path) -> None:
+    writer = ProfileManager(root=tmp_path, environ={"CGYY_CRED_KEY": "unit-test-key"})
+    writer.add_profile(
+        "alice",
+        {
+            "CGYY_DISPLAY_NAME": "Alice",
+            "CGYY_COOKIE": "cookie-token",
+            "CGYY_SSO_PASSWORD": "secret-password",
+        },
+    )
+
+    reader = ProfileManager(root=tmp_path, environ={})
+
+    summaries = {item.name: item for item in reader.list_profiles()}
+    values = {item.key: item for item in reader.show_profile("alice")}
+
+    assert summaries["alice"].display_name == "Alice"
+    assert summaries["alice"].auth_source == "self"
+    assert values["CGYY_COOKIE"].sensitive is True
+    assert values["CGYY_COOKIE"].value.startswith(ENC_PREFIX)
+    assert values["CGYY_SSO_PASSWORD"].sensitive is True
+    assert values["CGYY_SSO_PASSWORD"].value.startswith(ENC_PREFIX)
 
 
 def test_auth_manager_persists_auth_to_active_profile(tmp_path: Path) -> None:

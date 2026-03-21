@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
 
-from src.config.env_store import EnvStore
+from src.config.env_store import ENC_PREFIX, EnvStore
 
 DEFAULT_PROFILE = "default"
 PROFILE_DIRNAME = ".env.profiles"
@@ -138,14 +138,17 @@ class ProfileManager:
 
     def show_profile(self, name: str) -> list[ProfileValue]:
         store = self._store(name)
-        values = store.get_file_values()
+        values = store.get_file_values(decrypt=False)
         entries: list[ProfileValue] = []
         for key in sorted(values):
             value = values[key]
             sensitive = key in {"CGYY_COOKIE", "CGYY_CG_AUTH", "CGYY_SSO_PASSWORD"}
             shown = value
             if sensitive and value:
-                shown = f"{value[:3]}***{len(value)}"
+                if value.startswith(ENC_PREFIX):
+                    shown = f"{ENC_PREFIX}***"
+                else:
+                    shown = f"{value[:3]}***{len(value)}"
             entries.append(
                 ProfileValue(
                     key=key,

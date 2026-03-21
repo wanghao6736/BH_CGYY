@@ -41,6 +41,17 @@ class EnvStore:
             return []
         return read_path.read_text(encoding="utf-8").splitlines()
 
+    def _iter_file_items(self, path: Path | None = None):
+        for line in self._read_lines(path):
+            raw = line.strip()
+            if not raw or raw.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip()
+            if key:
+                yield key, value
+
     def _decode_value(self, key: str, value: str) -> str:
         if not value.startswith(ENC_PREFIX):
             return value
@@ -76,28 +87,30 @@ class EnvStore:
         payload = base64.urlsafe_b64encode(nonce + tag + ciphertext).decode("utf-8")
         return f"{ENC_PREFIX}{payload}"
 
-    def _load_from_file(self, path: Path | None = None) -> dict[str, str]:
+    def _load_from_file(self, path: Path | None = None, *, decrypt: bool = True) -> dict[str, str]:
         values: dict[str, str] = {}
-        for line in self._read_lines(path):
-            raw = line.strip()
-            if not raw or raw.startswith("#") or "=" not in line:
-                continue
-            key, value = line.split("=", 1)
-            key = key.strip()
-            value = value.strip()
-            if key:
-                values[key] = self._decode_value(key, value)
+        for key, value in self._iter_file_items(path):
+            values[key] = self._decode_value(key, value) if decrypt else value
         return values
 
-    def _load_from_files(self) -> tuple[dict[str, str], dict[str, Path]]:
+    def _load_from_files(self, *, decrypt: bool = True) -> tuple[dict[str, str], dict[str, Path]]:
         values: dict[str, str] = {}
         sources: dict[str, Path] = {}
         for path in self.paths:
-            loaded = self._load_from_file(path)
+            loaded = self._load_from_file(path, decrypt=decrypt)
             for key, value in loaded.items():
                 values[key] = value
                 sources[key] = path
         return values, sources
+
+    def _lookup_file_value(self, key: str, *, decrypt: bool = True) -> str | None:
+        found: str | None = None
+        for path in self.paths:
+            for current_key, current_value in self._iter_file_items(path):
+                if current_key != key:
+                    continue
+                found = self._decode_value(current_key, current_value) if decrypt else current_value
+        return found
 
     def load_to_environ(self) -> None:
         values, _ = self._load_from_files()
@@ -108,10 +121,9 @@ class EnvStore:
     def _get_raw(self, key: str, default: str = "") -> str:
         value = self.environ.get(key)
         if value is None:
-            values, _ = self._load_from_files()
-            if key not in values:
+            value = self._lookup_file_value(key, decrypt=True)
+            if value is None:
                 return default
-            value = values[key]
             self.environ[key] = value
         return self._decode_value(key, str(value))
 
@@ -217,12 +229,12 @@ class EnvStore:
             content += "\n"
         self.path.write_text(content, encoding="utf-8")
 
-    def get_file_values(self) -> dict[str, str]:
-        values, _ = self._load_from_files()
+    def get_file_values(self, *, decrypt: bool = True) -> dict[str, str]:
+        values, _ = self._load_from_files(decrypt=decrypt)
         return values
 
     def get_value_source(self, key: str) -> Path | None:
-        _, sources = self._load_from_files()
+        _, sources = self._load_from_files(decrypt=False)
         return sources.get(key)
 
     def clear_environ_keys(self, keys: list[str]) -> None:

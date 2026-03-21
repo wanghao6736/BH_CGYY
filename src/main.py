@@ -27,6 +27,8 @@ from src.utils.sign_utils import SignBuilder
 
 logger = logging.getLogger(__name__)
 
+SETTINGS_FREE_COMMANDS = {"logout", "profile"}
+
 
 def _setup_logging() -> None:
     fmt = "%(asctime)s [%(levelname)s] %(message)s"
@@ -154,13 +156,18 @@ def main() -> None:
     active_profile = normalize_profile_name(getattr(args, "profile", None), os.environ)
     env_store = build_env_store(active_profile, environ=dict(os.environ))
     profile_manager = ProfileManager(environ=dict(os.environ))
+    cmd = get_cmd(args)
+    if cmd in SETTINGS_FREE_COMMANDS:
+        auth_manager = AuthManager(ApiSettings(), AuthSettings(), SsoSettings(), env_store=env_store)
+        run_command(None, None, auth_manager, profile_manager, args)
+        return
+
     api_settings, user_settings, auth_settings, sso_settings = load_settings(
         active_profile,
         env_store=env_store,
     )
     merge_cli_overrides(args, api_settings, user_settings)
     auth_manager = AuthManager(api_settings, auth_settings, sso_settings, env_store=env_store)
-    cmd = get_cmd(args)
     workflow = None
     catalog_service = None
     if cmd not in ("login", "auth-status", "logout", "profile"):
