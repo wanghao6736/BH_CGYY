@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from argparse import Namespace
 from pathlib import Path
 
@@ -13,6 +14,7 @@ from src.cli.commands import get_cmd
 from src.cli.commands import run as run_command
 from src.cli.parser import build_parser
 from src.cli.validators import CliValidationError, validate_and_normalize_args
+from src.config.profiles import ProfileManager, build_env_store, normalize_profile_name
 from src.config.settings import (ApiSettings, AuthSettings, SsoSettings,
                                  UserSettings, load_settings)
 from src.core.captcha_service import CaptchaService
@@ -47,25 +49,25 @@ def merge_cli_overrides(
     """将 CLI 参数合并到 settings 中。优先级：CLI > .env/环境变量 > 默认值。"""
     cmd = get_cmd(args)
 
-    if args.date:
+    if getattr(args, "date", None):
         api_settings.default_search_date = args.date
         user_settings.reservation_date = args.date
         user_settings.week_start_date = args.date
 
-    if args.start_time:
+    if getattr(args, "start_time", None):
         user_settings.reservation_start_time = args.start_time
     elif cmd in ("info", "reserve"):
         user_settings.reservation_start_time = ""
 
-    if args.duration is not None:
+    if getattr(args, "duration", None) is not None:
         user_settings.reservation_slot_count = args.duration
     elif cmd in ("info", "reserve"):
         user_settings.reservation_slot_count = 1
 
-    if args.venue_site_id is not None and args.venue_site_id != -1:
+    if getattr(args, "venue_site_id", None) is not None and args.venue_site_id != -1:
         api_settings.venue_site_id = args.venue_site_id
 
-    if args.buddies:
+    if getattr(args, "buddies", None):
         user_settings.buddy_ids = args.buddies
 
     if getattr(args, "strategy", None):
@@ -77,6 +79,7 @@ def build_app(
     user_settings: UserSettings | None = None,
     auth_settings: AuthSettings | None = None,
     sso_settings: SsoSettings | None = None,
+    env_store=None,
     ensure_auth: bool = True,
 ) -> tuple[ReservationWorkflow, CatalogService]:
     if (
@@ -85,7 +88,7 @@ def build_app(
         or auth_settings is None
         or sso_settings is None
     ):
-        _api, _user, _auth, _sso = load_settings()
+        _api, _user, _auth, _sso = load_settings(env_store=env_store)
         if api_settings is None:
             api_settings = _api
         if user_settings is None:
@@ -96,7 +99,7 @@ def build_app(
             sso_settings = _sso
 
     if ensure_auth:
-        auth_manager = AuthManager(api_settings, auth_settings, sso_settings)
+        auth_manager = AuthManager(api_settings, auth_settings, sso_settings, env_store=env_store)
         auth_manager.ensure_cgyy_auth()
 
     sign_builder = SignBuilder(prefix=api_settings.prefix)
@@ -148,18 +151,25 @@ def main() -> None:
         print(format_request_result("参数检查", False, str(e)))
         return
 
-    api_settings, user_settings, auth_settings, sso_settings = load_settings()
+    active_profile = normalize_profile_name(getattr(args, "profile", None), os.environ)
+    env_store = build_env_store(active_profile, environ=dict(os.environ))
+    profile_manager = ProfileManager(environ=dict(os.environ))
+    api_settings, user_settings, auth_settings, sso_settings = load_settings(
+        active_profile,
+        env_store=env_store,
+    )
     merge_cli_overrides(args, api_settings, user_settings)
-    auth_manager = AuthManager(api_settings, auth_settings, sso_settings)
+    auth_manager = AuthManager(api_settings, auth_settings, sso_settings, env_store=env_store)
     cmd = get_cmd(args)
     workflow = None
     catalog_service = None
-    if cmd not in ("login", "auth-status", "logout"):
+    if cmd not in ("login", "auth-status", "logout", "profile"):
         workflow, catalog_service = build_app(
             api_settings,
             user_settings,
             auth_settings,
             sso_settings,
+            env_store=env_store,
             ensure_auth=True,
         )
 
@@ -167,7 +177,7 @@ def main() -> None:
         print("❌ 请指定 --trade-no 订单编号")
         return
 
-    run_command(workflow, catalog_service, auth_manager, args)
+    run_command(workflow, catalog_service, auth_manager, profile_manager, args)
 
 
 if __name__ == "__main__":

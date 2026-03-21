@@ -72,12 +72,21 @@ def format_solutions_table(
     return "\n".join(lines)
 
 
-def format_submit_result(success: bool, message: str, submit_parsed: Optional[SubmitParsed] = None) -> str:
+def format_submit_result(
+    success: bool,
+    message: str,
+    submit_parsed: Optional[SubmitParsed] = None,
+    *,
+    display_name: str = "",
+    profile_name: str = "",
+) -> str:
     """提交订单结果。"""
     line = format_request_result("提交订单", success, message)
     if success and submit_parsed:
         line += f"\n   📌 订单ID {submit_parsed.order_id} | 编号 {submit_parsed.trade_no}"
         line += f"\n   🕐 预约时间 {submit_parsed.reservation_start_date} ~ {submit_parsed.reservation_end_date}"
+        if display_name or profile_name:
+            line += f"\n   👤 预定人 {display_name or profile_name} | profile {profile_name or '-'}"
     return line
 
 
@@ -105,12 +114,12 @@ def format_order_detail(parsed: OrderDetailParsed) -> str:
 
 
 def format_buddy_list(buddies: List[Buddy]) -> str:
-    """格式化 buddy 列表，展示 id 与 name，便于用户写入 .env。"""
+    """格式化 buddy 列表，展示 id 与 name，便于用户写入 profile 配置。"""
     if not buddies:
         return "👥 可选同伴：暂无数据。"
     rows = [[b.id, b.name, b.user_id] for b in buddies]
     table = tabulate(rows, headers=["id", "姓名", "userId"], tablefmt="simple", stralign="left")
-    tip = "💡 请将需要使用的同伴 id 配置到 .env 的 CGYY_BUDDY_IDS 中（逗号分隔），下单时将只使用该配置。"
+    tip = "💡 请将需要使用的同伴 id 配置到当前 profile 的 CGYY_BUDDY_IDS 中（逗号分隔），下单时将只使用该配置。"
     return "👥 可选同伴\n" + table + "\n" + tip
 
 
@@ -131,5 +140,5 @@ def format_catalog_sites_table(sites: List[SiteItem], venue_site_id: Optional[in
         return f"🏟️ 场地列表：未找到 siteId={venue_site_id} 的场地。"
     rows = [[s.site_id, s.campus_name, s.venue_name, s.site_name] for s in sites]
     table = tabulate(rows, headers=["siteId", "校区", "场馆", "项目"], tablefmt="simple", stralign="left")
-    tip = "💡 siteId 即预约接口使用的 venueSiteId（可写入 .env 的 CGYY_VENUE_SITE_ID）。"
+    tip = "💡 siteId 即预约接口使用的 venueSiteId（可写入 default 或当前 profile 的 CGYY_VENUE_SITE_ID）。"
     return "🏟️ 场地列表\n" + table + "\n" + tip

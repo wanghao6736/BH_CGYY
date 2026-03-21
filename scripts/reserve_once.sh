@@ -6,13 +6,14 @@ set -euo pipefail
 # Options:
 #   -d DATE        预约日期 (YYYY-MM-DD)，透传给 python -m src.main reserve -d
 #   -p PATTERN     候选时间段列表，如 "15:00/2,17:00/2,19:00/1"
+#   -P PROFILE     覆盖本次调用的 profile
 #   -v SITE_ID     覆盖 CGYY_VENUE_SITE_ID
 #   -b BUDDIES     覆盖 CGYY_BUDDY_IDS，逗号分隔
 #   其他参数将原样透传给 python -m src.main。
 #
 # Candidate time configuration:
 #   1) -p PATTERN                  # explicit pairs HH:MM/DURATION,...
-#   2) 若未指定 -p，则不覆盖开始时间/时段数，由 Python 根据 .env 自己决定
+#   2) 若未指定 -p，则不覆盖开始时间/时段数，由 Python 根据当前 profile 与默认配置自行决定
 #
 # Exit code:
 #   0 if any attempt prints "✅ [成功] 提交订单"
@@ -34,6 +35,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     -p)
       pattern_arg="$2"
+      shift 2
+      ;;
+    -P|--profile)
+      pass_args+=("-P" "$2")
       shift 2
       ;;
     -v)
@@ -129,7 +134,7 @@ if [[ -n "$pattern_arg" ]]; then
   exit 1
 fi
  
-# No shell-level pattern configuration: delegate start/duration entirely to Python/.env.
+# No shell-level pattern configuration: delegate start/duration entirely to Python/profile config.
 if _run_attempt "" ""; then
   exit 0
 fi

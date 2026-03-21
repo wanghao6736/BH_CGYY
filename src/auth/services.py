@@ -7,6 +7,7 @@ from src.api.catalog_api import CatalogApi
 from src.api.client import ApiClient
 from src.auth.models import AuthContext, ServiceAuthState
 from src.config.settings import ApiSettings, AuthSettings, SsoSettings
+from src.parsers.common import parse_success_message
 from src.sso.adapters.base import ServiceAdapter
 from src.sso.adapters.cgyy_adapter import CgyyAdapter
 from src.sso.api.page_client import PageClient
@@ -37,11 +38,11 @@ class AuthProbeService:
                 retry_interval_sec=0.1,
             )
             raw = CatalogApi(client=client).website_init()
-            ok = bool(raw.get("code") == 200 or raw.get("repCode") == "0000")
-            logger.info("认证探活结果 ok=%s", ok)
+            ok, msg = parse_success_message(raw)
+            logger.info(f"认证探活结果 ok={ok} message={msg}")
             return ok
         except Exception as e:
-            logger.warning("认证探活失败: %s", e)
+            logger.warning(f"认证探活失败: {e}")
             return False
 
 
