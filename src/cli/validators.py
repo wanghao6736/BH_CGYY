@@ -4,6 +4,7 @@ from argparse import Namespace
 
 from src.cli.normalize import (normalize_buddies, normalize_date,
                                normalize_positive_int, normalize_time)
+from src.config.profiles import normalize_profile_name
 
 
 class CliValidationError(ValueError):
@@ -19,6 +20,12 @@ def validate_and_normalize_args(args: Namespace) -> Namespace:
     - 同伴：逗号分隔的非空 ID 列表。
     校验失败时抛 CliValidationError。
     """
+    if getattr(args, "profile", None) is not None:
+        args.profile = normalize_profile_name(args.profile)
+
+    if getattr(args, "cmd", None) == "profile" and getattr(args, "name", None):
+        args.name = normalize_profile_name(args.name)
+
     # 日期
     if getattr(args, "date", None):
         norm = normalize_date(args.date)
@@ -67,5 +74,27 @@ def validate_and_normalize_args(args: Namespace) -> Namespace:
     # 场地筛选策略字符串：目前仅做去首尾空白，具体策略名在业务层解析
     if getattr(args, "strategy", None):
         args.strategy = str(args.strategy).strip()
+
+    if getattr(args, "set_values", None):
+        normalized_items: list[str] = []
+        for item in args.set_values:
+            raw = str(item).strip()
+            if "=" not in raw:
+                raise CliValidationError(f"无效的设置项 '{item}'，请使用 KEY=VALUE。")
+            key, value = raw.split("=", 1)
+            key = key.strip()
+            if not key:
+                raise CliValidationError(f"无效的设置项 '{item}'，缺少 KEY。")
+            normalized_items.append(f"{key}={value}")
+        args.set_values = normalized_items
+
+    if getattr(args, "unset_keys", None):
+        normalized_keys: list[str] = []
+        for key in args.unset_keys:
+            raw = str(key).strip()
+            if not raw:
+                raise CliValidationError("unset 的 KEY 不能为空。")
+            normalized_keys.append(raw)
+        args.unset_keys = normalized_keys
 
     return args

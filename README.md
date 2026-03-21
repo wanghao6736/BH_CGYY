@@ -7,9 +7,9 @@ orchestration, and terminal-oriented output.
 
 ## Highlights
 
-- Configuration loaded from `.env` and environment variables through a unified store
+- Layered configuration loaded from a default profile plus optional profile-specific overrides
 - Layered HTTP clients for signed API requests and SSO page flows
-- Authentication pipeline with automatic refresh and `.env` persistence
+- Authentication pipeline with automatic refresh and per-profile credential persistence
 - Parsing, workflow, and presentation layers kept separate
 - Command-line entry points plus helper shell scripts for repeated execution
 
@@ -52,7 +52,7 @@ Pass `--help` for the available commands:
 cgyy --help
 ```
 
-See [`docs/README.md`](docs/README.md) for the detailed project guide.
+Detailed operator notes can be kept locally under `docs/` when needed.
 
 ## Project Structure
 

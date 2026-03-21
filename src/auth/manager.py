@@ -70,7 +70,7 @@ class AuthManager:
 
     def _persist_auth(self, state: ServiceAuthState) -> None:
         if not self.sso_settings.persist_to_env:
-            logger.info("已跳过 .env 持久化（CGYY_AUTH_PERSIST_TO_ENV=0）")
+            logger.info("已跳过鉴权持久化（CGYY_AUTH_PERSIST_TO_ENV=0）")
             return
         self.env_store.set_values(
             {

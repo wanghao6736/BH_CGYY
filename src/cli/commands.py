@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from src.auth.manager import AuthManager
+from src.config.profiles import DISPLAY_NAME_ENV_VAR, ProfileManager
 from src.core.exceptions import (BuddyConfigError, CaptchaError, CgyyError,
                                  QueryError)
 from src.presenters.format import (format_buddy_list,
@@ -32,6 +33,7 @@ def run(
     workflow: "ReservationWorkflow | None",
     catalog_service: "CatalogService | None",
     auth_manager: AuthManager,
+    profile_manager: ProfileManager,
     args: Namespace,
 ) -> None:
     """根据 args.cmd 分发到对应子命令。"""
@@ -54,8 +56,26 @@ def run(
         run_auth_status(auth_manager)
     elif cmd == "logout":
         run_logout(auth_manager)
+    elif cmd == "profile":
+        run_profile(profile_manager, args)
     else:
         run_reserve(workflow, args)
+
+
+def _display_name(profile_name: str, configured_name: str = "") -> str:
+    return configured_name or profile_name
+
+
+def _print_identity(profile_name: str, configured_name: str = "") -> None:
+    print(f"   👤 当前身份 {_display_name(profile_name, configured_name)} | profile {profile_name}")
+
+
+def _parse_updates(items: list[str] | None) -> dict[str, str]:
+    updates: dict[str, str] = {}
+    for item in items or []:
+        key, value = item.split("=", 1)
+        updates[key] = value
+    return updates
 
 
 def run_catalog(
@@ -152,6 +172,10 @@ def run_order_detail(workflow: "ReservationWorkflow", args: Namespace) -> None:
         ok, msg, parsed = workflow.reservation_service.get_order_detail_parsed(args.trade_no)
         print(format_request_result("查询订单详情", ok, msg))
         if ok and parsed:
+            _print_identity(
+                workflow.user_settings.profile_name,
+                workflow.user_settings.display_name,
+            )
             print(format_order_detail(parsed))
     except Exception as e:
         logger.exception("查询订单失败")
@@ -174,7 +198,7 @@ def _print_reserve_hints(exc: Exception) -> None:
     """根据异常类型给出可执行的下一步建议。"""
     hints: list[str] = []
     if isinstance(exc, BuddyConfigError):
-        hints.append("请在 .env 中配置 CGYY_BUDDY_IDS（逗号分隔的同伴 id）")
+        hints.append("请在当前 profile 配置中写入 CGYY_BUDDY_IDS（逗号分隔的同伴 id）")
         hints.append("查看可选同伴：python -m src.main info --show-order-param")
     elif isinstance(exc, QueryError):
         hints.append("尝试其他日期：python -m src.main reserve -d YYYY-MM-DD")
@@ -185,7 +209,7 @@ def _print_reserve_hints(exc: Exception) -> None:
     else:
         low = str(exc).lower()
         if "cookie" in low or "authorization" in low or "401" in str(exc) or "403" in str(exc):
-            hints.append("登录凭证可能过期，请更新 .env 中的 CGYY_COOKIE 和 CGYY_CG_AUTH")
+            hints.append("登录凭证可能过期，请更新当前 profile 中的 CGYY_COOKIE 和 CGYY_CG_AUTH")
     if not hints:
         hints.append("查看帮助：python -m src.main --help")
     print("\n💡 下一步建议：")
@@ -208,6 +232,11 @@ def run_reserve(workflow: "ReservationWorkflow", args: Namespace) -> None:
                 result.reservation.success,
                 result.reservation.message or "",
                 result.reservation.submit_parsed,
+                display_name=_display_name(
+                    workflow.user_settings.profile_name,
+                    workflow.user_settings.display_name,
+                ),
+                profile_name=workflow.user_settings.profile_name,
             )
         )
     except CgyyError as e:
@@ -226,6 +255,9 @@ def run_login(auth_manager: AuthManager) -> None:
         state = result.state
         source = state.source if state else "-"
         print(format_request_result("认证登录", True, f"认证可用，source={source}"))
+        configured_name = auth_manager.env_store.get_str(DISPLAY_NAME_ENV_VAR, "")
+        profile_name = auth_manager.env_store.path.stem if auth_manager.env_store.path.name != ".env" else "default"
+        _print_identity(profile_name, configured_name)
         if state:
             print(f"   🍪 cookie: {'已获取' if state.cookie else '未获取'}")
             print(f"   🔑 cgAuthorization: {'已获取' if state.cg_authorization else '未获取'}")
@@ -239,8 +271,11 @@ def run_auth_status(auth_manager: AuthManager) -> None:
         result = auth_manager.get_cgyy_auth_status()
         state = result.state
         ok = bool(state and state.cookie and state.cg_authorization and result.reused)
-        msg = "当前 .env 鉴权可用" if ok else "当前 .env 鉴权缺失或已失效"
+        msg = "当前 profile 鉴权可用" if ok else "当前 profile 鉴权缺失或已失效"
         print(format_request_result("认证状态", ok, msg))
+        configured_name = auth_manager.env_store.get_str(DISPLAY_NAME_ENV_VAR, "")
+        profile_name = auth_manager.env_store.path.stem if auth_manager.env_store.path.name != ".env" else "default"
+        _print_identity(profile_name, configured_name)
         if state:
             obtained = "-"
             if state.obtained_at:
@@ -250,7 +285,7 @@ def run_auth_status(auth_manager: AuthManager) -> None:
             print(f"   🍪 cookie: {'已配置' if state.cookie else '缺失'}")
             print(f"   🔑 cgAuthorization: {'已配置' if state.cg_authorization else '缺失'}")
         if not ok:
-            print("   💡 可执行 `python -m src.main login` 自动刷新鉴权信息。")
+            print("   💡 可执行 `python -m src.main login -P <profile>` 自动刷新鉴权信息。")
     except Exception as e:
         logger.exception("查询认证状态失败")
         print(format_request_result("认证状态", False, str(e)))
@@ -259,7 +294,50 @@ def run_auth_status(auth_manager: AuthManager) -> None:
 def run_logout(auth_manager: AuthManager) -> None:
     try:
         auth_manager.clear_cgyy_auth()
-        print(format_request_result("清理认证", True, "已清空 .env 中的 CGYY_COOKIE / CGYY_CG_AUTH"))
+        print(format_request_result("清理认证", True, "已清空当前 profile 中的 CGYY_COOKIE / CGYY_CG_AUTH"))
+        configured_name = auth_manager.env_store.get_str(DISPLAY_NAME_ENV_VAR, "")
+        profile_name = auth_manager.env_store.path.stem if auth_manager.env_store.path.name != ".env" else "default"
+        _print_identity(profile_name, configured_name)
     except Exception as e:
         logger.exception("清理认证缓存失败")
         print(format_request_result("清理认证", False, str(e)))
+
+
+def run_profile(profile_manager: ProfileManager, args: Namespace) -> None:
+    try:
+        cmd = getattr(args, "profile_cmd", "")
+        if cmd == "list":
+            profiles = profile_manager.list_profiles()
+            print(format_request_result("profile 列表", True, f"共 {len(profiles)} 个"))
+            for item in profiles:
+                print(
+                    f"   - {item.name} | 显示名 {item.display_name} | "
+                    f"auth={item.auth_source} | sso={item.sso_source} | path={item.path}"
+                )
+            return
+        if cmd == "show":
+            values = profile_manager.show_profile(args.name)
+            print(format_request_result("profile 详情", True, args.name))
+            for item in values:
+                print(f"   - {item.key}={item.value} ({item.source})")
+            return
+        if cmd == "add":
+            path = profile_manager.add_profile(args.name, _parse_updates(args.set_values))
+            print(format_request_result("profile 新增", True, str(path)))
+            return
+        if cmd == "modify":
+            path = profile_manager.modify_profile(
+                args.name,
+                updates=_parse_updates(args.set_values),
+                unset_keys=list(args.unset_keys or []),
+            )
+            print(format_request_result("profile 修改", True, str(path)))
+            return
+        if cmd == "remove":
+            profile_manager.remove_profile(args.name, force=bool(args.force))
+            print(format_request_result("profile 删除", True, args.name))
+            return
+        raise ValueError(f"未知 profile 子命令: {cmd}")
+    except Exception as e:
+        logger.exception("profile 命令失败")
+        print(format_request_result("profile 命令", False, str(e)))

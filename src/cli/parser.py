@@ -1,11 +1,21 @@
-"""CGYY CLI 参数解析。子命令：reserve（默认）, info, catalog, fetch-captcha, verify-captcha, order-detail, cancel-order, login, auth-status, logout。"""
+"""CGYY CLI 参数解析。子命令：reserve（默认）, info, catalog, fetch-captcha, verify-captcha, order-detail, cancel-order, login, auth-status, logout, profile。"""
 from __future__ import annotations
 
 import argparse
 
 
+def _add_profile_option(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "-P",
+        "--profile",
+        default=None,
+        help="使用的 profile 名称，默认 default",
+    )
+
+
 def _add_common_options(parser: argparse.ArgumentParser) -> None:
     """为 info/reserve 等添加共用选项。"""
+    _add_profile_option(parser)
     parser.add_argument(
         "-d",
         "--date",
@@ -35,7 +45,7 @@ def _add_common_options(parser: argparse.ArgumentParser) -> None:
         dest="duration",
         type=int,
         default=None,
-        help="info/reserve 连续时段数，不传则默认为 1",
+        help="info/reserve 连续时段数，不传则沿用当前配置",
     )
     parser.add_argument(
         "-b",
@@ -83,11 +93,58 @@ def build_parser() -> argparse.ArgumentParser:
         ("verify-captcha", "识别并校验验证码"),
         ("order-detail", "查询订单详情"),
         ("cancel-order", "取消订单"),
-        ("login", "执行 SSO 自动登录并刷新 .env 鉴权信息"),
-        ("auth-status", "查看当前 .env 鉴权状态"),
-        ("logout", "清空 .env 中的鉴权信息"),
+        ("login", "执行 SSO 自动登录并刷新当前 profile 鉴权信息"),
+        ("auth-status", "查看当前 profile 鉴权状态"),
+        ("logout", "清空当前 profile 中的鉴权信息"),
     ]:
         subp = sub.add_parser(name, help=help_text)
         _add_common_options(subp)
+
+    profile_parser = sub.add_parser("profile", help="管理 profile 配置")
+    profile_sub = profile_parser.add_subparsers(dest="profile_cmd", required=True, help="profile 子命令")
+
+    profile_sub.add_parser("list", help="列出 profile")
+
+    show_parser = profile_sub.add_parser("show", help="查看 profile")
+    show_parser.add_argument("name", help="profile 名称")
+
+    add_parser = profile_sub.add_parser("add", help="新增 profile")
+    add_parser.add_argument("name", help="profile 名称")
+    add_parser.add_argument(
+        "-s",
+        "--set",
+        dest="set_values",
+        action="append",
+        default=[],
+        help="设置 KEY=VALUE，可重复",
+    )
+
+    modify_parser = profile_sub.add_parser("modify", help="修改 profile")
+    modify_parser.add_argument("name", help="profile 名称")
+    modify_parser.add_argument(
+        "-s",
+        "--set",
+        dest="set_values",
+        action="append",
+        default=[],
+        help="设置 KEY=VALUE，可重复",
+    )
+    modify_parser.add_argument(
+        "-u",
+        "--unset",
+        dest="unset_keys",
+        action="append",
+        default=[],
+        help="移除指定 KEY，可重复",
+    )
+
+    remove_parser = profile_sub.add_parser("remove", help="删除 profile")
+    remove_parser.add_argument("name", help="profile 名称")
+    remove_parser.add_argument(
+        "-f",
+        "--force",
+        action="store_true",
+        help="确认删除",
+    )
 
     return parser

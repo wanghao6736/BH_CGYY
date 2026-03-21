@@ -85,7 +85,7 @@ class ReservationWorkflow:
     # ------------------------------------------------------------------
 
     def _resolve_buddy_ids(self, info: DayInfoParsed) -> str:
-        """根据场地同伴人数要求和用户 .env 配置确定最终 buddyIds。"""
+        """根据场地同伴人数要求和当前 profile 配置确定最终 buddyIds。"""
         if not info.site_param:
             return self.user_settings.buddy_ids
 
@@ -106,8 +106,8 @@ class ReservationWorkflow:
         ]
         if len(configured) < need:
             raise BuddyConfigError(
-                f"该场地要求至少 {buddy_num_min} 名同伴，但 .env 中 CGYY_BUDDY_IDS 配置不足 "
-                f"(need={need}, got={len(configured)})，请先在 .env 中配置同伴 id。"
+                f"该场地要求至少 {buddy_num_min} 名同伴，但当前 profile 中 CGYY_BUDDY_IDS 配置不足 "
+                f"(need={need}, got={len(configured)})，请先在当前 profile 中配置同伴 id。"
             )
         return ",".join(configured[:need])
 

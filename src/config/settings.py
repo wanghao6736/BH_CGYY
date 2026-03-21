@@ -1,8 +1,10 @@
+import os
 from dataclasses import dataclass
 from datetime import date
 from typing import Tuple
 
 from src.config.env_store import EnvStore
+from src.config.profiles import build_env_store, normalize_profile_name
 
 
 def _today_str() -> str:
@@ -29,6 +31,8 @@ class ApiSettings:
 
 @dataclass
 class UserSettings:
+    profile_name: str = "default"
+    display_name: str = ""
     phone: str = ""
     buddy_ids: str = ""
     reservation_date: str = ""
@@ -64,8 +68,12 @@ class SsoSettings:
     persist_to_env: bool = True
 
 
-def load_settings() -> Tuple[ApiSettings, UserSettings, AuthSettings, SsoSettings]:
-    env = EnvStore()
+def load_settings(
+    profile_name: str | None = None,
+    env_store: EnvStore | None = None,
+) -> Tuple[ApiSettings, UserSettings, AuthSettings, SsoSettings]:
+    env = env_store or build_env_store(profile_name, environ=dict(os.environ))
+    active_profile = normalize_profile_name(profile_name, env.environ)
 
     api = ApiSettings(
         base_url=env.get_str("CGYY_BASE_URL", ApiSettings.base_url),
@@ -81,6 +89,8 @@ def load_settings() -> Tuple[ApiSettings, UserSettings, AuthSettings, SsoSetting
         retry_interval_sec=env.get_float("CGYY_RETRY_INTERVAL_SEC", ApiSettings.retry_interval_sec),
     )
     user = UserSettings(
+        profile_name=active_profile,
+        display_name=env.get_str("CGYY_DISPLAY_NAME", ""),
         phone=env.get_str("CGYY_PHONE", UserSettings.phone),
         buddy_ids=env.get_str("CGYY_BUDDY_IDS", UserSettings.buddy_ids),
         reservation_date=_today_str(),

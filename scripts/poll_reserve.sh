@@ -9,7 +9,7 @@ set -euo pipefail
 #   CGYY_NOTIFY_ON_FAIL      default 0 (set 1 to notify when giving up)
 #
 # Usage:
-#   scripts/poll_reserve.sh [-d YYYY-MM-DD] [-p HH:MM/N,...] [-v SITE_ID] [-b BUDDIES] [-i INTERVAL_SEC] [-n MAX_ATTEMPTS]
+#   scripts/poll_reserve.sh [-d YYYY-MM-DD] [-p HH:MM/N,...] [-P PROFILE] [-v SITE_ID] [-b BUDDIES] [-i INTERVAL_SEC] [-n MAX_ATTEMPTS]
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
@@ -81,4 +81,3 @@ while :; do
   echo "Sleep ${interval}s..."
   sleep "$interval"
 done
-
