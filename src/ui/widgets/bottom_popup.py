@@ -24,6 +24,7 @@ class BottomPopup(QWidget):
         self._app_filter_installed = False
         self._visible = False
         self._drag_pos: Optional[QPoint] = None
+        self._last_placement_size: tuple[int, int] = (0, 0)
 
     def show_at_bottom(self) -> None:
         """在父窗口下方居中显示，空间不足时回退到上方。"""
@@ -36,10 +37,12 @@ class BottomPopup(QWidget):
         target_width = max(self.sizeHint().width(), parent_rect.width() - 16)
         self.setFixedWidth(target_width)
         self.adjustSize()
+        self._last_placement_size = self._placement_size_tuple()
         self._position_relative_to_parent()
         self._install_app_event_filter()
         self.show()
         self._visible = True
+        # 仅在 show 后布局尺寸变化时二次定位，避免首帧用不可靠的 frameGeometry 高度导致闪烁
         QTimer.singleShot(0, self._reposition_after_show)
 
     def on_before_show_at_bottom(self) -> None:
@@ -56,15 +59,25 @@ class BottomPopup(QWidget):
         """是否允许从当前位置开始拖动。"""
         return True
 
+    def _placement_size_tuple(self) -> tuple[int, int]:
+        """用于溢出判断的宽高。show() 前勿依赖 frameGeometry（常为 0 或过时）。"""
+        self.adjustSize()
+        w = max(self.width(), self.sizeHint().width(), 1)
+        h = max(
+            self.height(),
+            self.sizeHint().height(),
+            self.minimumSizeHint().height(),
+            1,
+        )
+        return w, h
+
     def _position_relative_to_parent(self) -> None:
         parent = self.parent()
         if parent is None:
             return
 
         parent_rect = parent.frameGeometry()
-        popup_rect = self.frameGeometry()
-        popup_width = popup_rect.width() or self.width()
-        popup_height = popup_rect.height() or self.height()
+        popup_width, popup_height = self._placement_size_tuple()
 
         x = parent_rect.center().x() - popup_width // 2
         y = parent_rect.bottom() + 8
@@ -74,10 +87,10 @@ class BottomPopup(QWidget):
             screen_rect = screen.availableGeometry()
             if y + popup_height > screen_rect.bottom():
                 y = parent_rect.top() - popup_height - 8
-            if x + popup_width > screen_rect.right():
-                x = screen_rect.right() - popup_width
-            if x < screen_rect.left():
-                x = screen_rect.left()
+            max_y = screen_rect.bottom() - popup_height
+            y = max(screen_rect.top(), min(y, max_y))
+            upper_x = max(screen_rect.left(), screen_rect.right() - popup_width)
+            x = max(screen_rect.left(), min(x, upper_x))
 
         self.move(x, y)
 
@@ -85,7 +98,10 @@ class BottomPopup(QWidget):
         if not self.isVisible():
             return
         self.adjustSize()
-        self._position_relative_to_parent()
+        current = self._placement_size_tuple()
+        if current != self._last_placement_size:
+            self._last_placement_size = current
+            self._position_relative_to_parent()
 
     def _install_app_event_filter(self) -> None:
         if self._app_filter_installed:

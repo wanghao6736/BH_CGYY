@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import QObject, Signal
 
+from src.notifier import send_notification
 from src.ui.facade import BoardQuery, ReserveRequest, UiFacade
 from src.ui.state import SettingsFormState
 from src.ui.tasks import UiTaskRunner, UiTaskSpec
@@ -130,6 +131,22 @@ class UiController(QObject):
             )
         )
         return generation if started else None
+
+    def request_notification(
+        self,
+        title: str,
+        message: str,
+        *,
+        profile_name: str | None = None,
+    ) -> None:
+        self._runner.submit_background(
+            lambda: send_notification(
+                title,
+                message,
+                profile_name=profile_name,
+            ),
+            label="notification",
+        )
 
     def _handle_result(self, lane: str, generation: int, payload: object) -> None:
         if lane == "session":

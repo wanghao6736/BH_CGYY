@@ -13,7 +13,8 @@ from src.cli.commands import get_cmd
 from src.cli.commands import run as run_command
 from src.cli.parser import build_parser
 from src.cli.validators import CliValidationError, validate_and_normalize_args
-from src.config.profiles import ProfileManager, build_env_store, normalize_profile_name
+from src.config.profiles import (ProfileManager, build_env_store,
+                                 normalize_profile_name)
 from src.config.settings import (ApiSettings, AuthSettings, SsoSettings,
                                  UserSettings, load_settings)
 from src.core.captcha_service import CaptchaService

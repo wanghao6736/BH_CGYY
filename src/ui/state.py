@@ -137,6 +137,10 @@ class ReserveOutcome:
     message: str
     trade_no: str = ""
     order_id: int = 0
+    reservation_start_date: str = ""
+    reservation_end_date: str = ""
+    profile_name: str = ""
+    display_name: str = ""
 
 
 @dataclass
