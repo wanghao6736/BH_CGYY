@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QDate, QTime, Qt
-from PySide6.QtGui import QColor
+from PySide6.QtCore import QDate
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QLineEdit,
                                QMainWindow, QPushButton, QStatusBar,
-                               QTableWidget, QTableWidgetItem, QVBoxLayout,
-                               QWidget)
+                               QVBoxLayout, QWidget)
 
 from src.ui.animations import build_expand_animation
 from src.ui.facade import BoardQuery, ReserveRequest
@@ -14,8 +12,10 @@ from src.ui.state import (BoardCell, BoardState, PollingState, PollingStatus,
                           ReserveOutcome, SelectionState, SessionState,
                           SessionStatus, SettingsFormState)
 from src.ui.theme import APP_QSS
-from src.ui.widgets import (ActionBar, BoardDialog, BookingCard, PanelDialog,
-                            PollDialog, PollingSummary, TopToolbar)
+from src.ui.widgets import (ActionBar, BookingCard, PanelDialog, PollDialog,
+                            PollingSummary, TopToolbar)
+from src.ui.widgets.board_panel import BoardPanel
+from src.ui.widgets.heatmap_widget import CellStatus, HeatCell
 
 
 class MainWindow(QMainWindow):
@@ -28,7 +28,6 @@ class MainWindow(QMainWindow):
         self.selection_state: SelectionState | None = None
         self.settings_state: SettingsFormState | None = None
         self.polling_state = PollingState()
-        self._cell_lookup: dict[tuple[int, int], BoardCell] = {}
         self._board_busy = False
         self._reserve_busy = False
         self._settings_busy = False
@@ -122,10 +121,10 @@ class MainWindow(QMainWindow):
         self.polling_summary.hide()
         root_layout.addWidget(self.polling_summary)
 
-        # 场地表格弹窗
-        self.board_dialog = BoardDialog(self)
-        self.board_table: QTableWidget = self.board_dialog.board_table
-        self.board_table.cellClicked.connect(self._handle_cell_clicked)
+        # 详情热力图面板
+        self.board_panel = BoardPanel(self)
+        self.heatmap = self.board_panel.heatmap
+        self.heatmap.cellClicked.connect(self._handle_heatmap_cell_clicked)
 
         # 设置面板弹窗
         self.panel_dialog = PanelDialog(self)
@@ -134,8 +133,8 @@ class MainWindow(QMainWindow):
         self.phone_input = self.panel_dialog.phone_input
         self.buddy_input = self.panel_dialog.buddy_input
         self.settings_site_input = self.panel_dialog.settings_site_input
-        self.settings_date_input = self.panel_dialog.settings_date_edit
-        self.settings_start_input = self.panel_dialog.settings_start_time_edit
+        self.settings_date_input = self.panel_dialog.settings_date_input
+        self.settings_start_input = self.panel_dialog.settings_start_input
         self.settings_slot_input = self.panel_dialog.settings_slot_input
         self.save_settings_button = self.panel_dialog.save_settings_button
 
@@ -147,7 +146,7 @@ class MainWindow(QMainWindow):
         self.action_bar.reserve_button.clicked.connect(self._reserve_selected)
         self.action_bar.query_button.clicked.connect(self._refresh_board)
         self.action_bar.poll_button.clicked.connect(self._toggle_polling)
-        self.action_bar.details_button.clicked.connect(self._toggle_board_dialog)
+        self.action_bar.details_button.clicked.connect(self._toggle_board_panel)
         self.profile_combo.currentIndexChanged.connect(self._handle_profile_combo_changed)
         self.top_toolbar.settings_button.clicked.connect(self._open_panel_dialog)
         self.login_button.clicked.connect(self._login_current_profile)
@@ -158,12 +157,11 @@ class MainWindow(QMainWindow):
         self.panel_dialog.raise_()
         self.panel_dialog.activateWindow()
 
-    def _toggle_board_dialog(self) -> None:
-        if self.board_dialog.isVisible():
-            self.board_dialog.hide()
+    def _toggle_board_panel(self) -> None:
+        if self.board_panel.isVisible():
+            self.board_panel.hide()
         else:
-            self.board_dialog.show()
-            self.board_dialog.raise_()
+            self.board_panel.show_at_bottom()
 
     def _load_profiles(self) -> None:
         profiles = self.facade.list_profiles()
@@ -229,31 +227,54 @@ class MainWindow(QMainWindow):
         self.board_state = state
         sync_text = f"{state.last_sync_at or '-'}"
         self.top_toolbar.set_sync_text(sync_text)
-        self.board_dialog.set_sync_text(sync_text)
-        self._render_board_table()
+        self.board_panel.set_sync_text(sync_text)
+        self._render_heatmap()
 
-    def _render_board_table(self) -> None:
+    def _map_cell_status(self, cell: BoardCell) -> CellStatus:
+        """将 BoardCell 状态映射到热力图状态"""
+        if cell.status_text == "未知":
+            return CellStatus.UNKNOWN
+        if not cell.is_available:
+            return CellStatus.RESERVED
+        if cell.selectable:
+            return CellStatus.AVAILABLE
+        return CellStatus.LOCKED
+
+    def _render_heatmap(self) -> None:
+        """渲染热力图"""
         state = self.board_state
         if state is None:
             return
-        self.board_table.clear()
-        self.board_table.setRowCount(len(state.rows))
-        self.board_table.setColumnCount(len(state.time_headers))
-        self.board_table.setHorizontalHeaderLabels(state.time_headers)
-        self.board_table.setVerticalHeaderLabels([row.space_name for row in state.rows])
-        self._cell_lookup.clear()
+
+        rows = len(state.rows)
+        cols = len(state.time_headers) if state.time_headers else 0
+        self.heatmap.set_dimensions(rows, cols)
+
+        # 设置表头
+        self.heatmap.set_headers(
+            row_headers=[row.space_name for row in state.rows],
+            col_headers=state.time_headers
+        )
+
+        # 设置单元格数据
         selected_slots = self._selected_slots()
         for row_index, row in enumerate(state.rows):
             for col_index, cell in enumerate(row.cells):
                 key = (cell.space_id, cell.begin_time)
-                item = QTableWidgetItem(self._cell_text(cell, key in selected_slots))
-                item.setTextAlignment(Qt.AlignCenter)
-                fg_color, bg_color = self._cell_colors(cell=cell, is_selected=key in selected_slots)
-                item.setForeground(fg_color)
-                item.setBackground(bg_color)
-                self.board_table.setItem(row_index, col_index, item)
-                self._cell_lookup[(row_index, col_index)] = cell
-        self.board_table.resizeRowsToContents()
+                heat_cell = HeatCell(
+                    status=self._map_cell_status(cell),
+                    enabled=cell.selectable,
+                    selected=key in selected_slots,
+                    tooltip=f"{cell.space_name} {cell.begin_time}-{cell.end_time}"
+                )
+                self.heatmap.set_cell(row_index, col_index, heat_cell)
+
+        # 更新选择摘要
+        if self.selection_state:
+            summary = f"{self.selection_state.space_name} {self.selection_state.start_time}-{self.selection_state.end_time}"
+        else:
+            summary = "点击单元格选择时段"
+        self.board_panel.set_selection_summary(summary)
 
     def _selected_slots(self) -> set[tuple[int, str]]:
         if self.selection_state is None or self.board_state is None:
@@ -267,32 +288,14 @@ class MainWindow(QMainWindow):
                     selected.add((cell.space_id, cell.begin_time))
         return selected
 
-    def _cell_text(self, cell: BoardCell, is_selected: bool) -> str:
-        if is_selected:
-            return "✓"
-        if cell.status_text == "未知":
-            return "-"
-        return "○" if cell.is_available else "●"
-
-    def _cell_colors(self, *, cell: BoardCell, is_selected: bool) -> tuple[QColor, QColor]:
-        if is_selected:
-            return QColor("#ffffff"), QColor("#0EA5A4")
-        if cell.selectable:
-            return QColor("#0C4A6E"), QColor("#E6F6F6")
-        if cell.status_text == "未知":
-            return QColor("#7A6F66"), QColor("#F5EEE8")
-        if cell.is_available:
-            return QColor("#5B6575"), QColor("#EEF4F8")
-        return QColor("#8A4D4D"), QColor("#FEECEC")
-
     def apply_selection_state(self, state: SelectionState | None) -> None:
         self.selection_state = state
         summary = "未选择" if state is None else f"{state.space_name} {state.start_time}-{state.end_time}"
         self.booking_card.set_target_summary(summary)
-        self.board_dialog.set_selection_summary(summary)
+        self.board_panel.set_selection_summary(summary)
         self.panel_dialog.target_summary.setText(summary)
         if self.board_state is not None:
-            self._render_board_table()
+            self._render_heatmap()
         self._update_enabled_state()
 
     def apply_settings_state(self, state: SettingsFormState) -> None:
@@ -300,10 +303,10 @@ class MainWindow(QMainWindow):
         self.display_name_input.setText(state.display_name)
         self.phone_input.setText(state.phone)
         self.buddy_input.setText(state.buddy_ids)
-        self.settings_site_input.setValue(state.venue_site_id)
-        self.settings_slot_input.setValue(state.slot_count)
-        self._set_date_value(self.settings_date_input, state.default_search_date)
-        self._set_time_value(self.settings_start_input, state.start_time)
+        self.settings_site_input.setText(str(state.venue_site_id))
+        self.settings_slot_input.setCurrentIndex(max(0, min(state.slot_count - 1, 5)))
+        self._set_date_combo_value(self.settings_date_input, state.default_search_date)
+        self._set_time_combo_value(self.settings_start_input, state.start_time)
         self.booking_card.set_values(
             date=state.default_search_date,
             start_time=state.start_time,
@@ -311,13 +314,32 @@ class MainWindow(QMainWindow):
             venue_site_id=state.venue_site_id,
         )
 
-    def _set_date_value(self, widget, value: str) -> None:
+    def _set_date_combo_value(self, combo, value: str) -> None:
+        """设置日期下拉框的值"""
         parsed = QDate.fromString(value, "yyyy-MM-dd")
-        widget.setDate(parsed if parsed.isValid() else QDate.currentDate())
+        if not parsed.isValid():
+            combo.setCurrentIndex(0)
+            return
 
-    def _set_time_value(self, widget, value: str) -> None:
-        parsed = QTime.fromString(value, "HH:mm")
-        widget.setTime(parsed if parsed.isValid() else QTime(18, 0))
+        today = QDate.currentDate()
+        days_diff = today.daysTo(parsed)
+
+        if days_diff == 0:
+            combo.setCurrentIndex(0)  # 今天
+        elif days_diff == 1:
+            combo.setCurrentIndex(1)  # 明天
+        elif 0 <= days_diff < 7:
+            combo.setCurrentIndex(days_diff)
+        else:
+            combo.setCurrentIndex(0)
+
+    def _set_time_combo_value(self, combo, value: str) -> None:
+        """设置时间下拉框的值"""
+        idx = combo.findText(value)
+        if idx >= 0:
+            combo.setCurrentIndex(idx)
+        else:
+            combo.setCurrentIndex(20)  # 默认 18:00
 
     def _refresh_board(self) -> None:
         query = self._current_board_query()
@@ -342,16 +364,33 @@ class MainWindow(QMainWindow):
         except Exception:
             return
 
-    def _handle_cell_clicked(self, row: int, column: int) -> None:
+    def _handle_heatmap_cell_clicked(self, row: int, col: int) -> None:
+        """处理热力图单元格点击"""
         if self._reserve_busy or self._board_busy:
             return
-        cell = self._cell_lookup.get((row, column))
-        if cell is None or self.board_state is None or not cell.selectable:
+        if self.board_state is None or row >= len(self.board_state.rows):
             self.apply_selection_state(None)
             return
+
         row_state = self.board_state.rows[row]
-        start_idx = next((idx for idx, item in enumerate(row_state.cells) if item.time_id == cell.time_id), 0)
+        if col >= len(row_state.cells):
+            self.apply_selection_state(None)
+            return
+
+        cell = row_state.cells[col]
+        if not cell.selectable:
+            self.apply_selection_state(None)
+            return
+
+        start_idx = col
         end_idx = min(start_idx + self.board_state.slot_count - 1, len(row_state.cells) - 1)
+        
+        # 检查范围内所有单元格是否都可选
+        for i in range(start_idx, end_idx + 1):
+            if not row_state.cells[i].selectable:
+                self.apply_selection_state(None)
+                return
+        
         end_cell = row_state.cells[end_idx]
         self.apply_selection_state(
             SelectionState(
@@ -362,6 +401,10 @@ class MainWindow(QMainWindow):
                 slot_count=self.board_state.slot_count,
             )
         )
+
+    def _handle_cell_clicked(self, row: int, column: int) -> None:
+        """处理表格单元格点击（已弃用，保留兼容）"""
+        pass
 
     def _login_current_profile(self) -> None:
         if hasattr(self.controller, "request_login"):
@@ -387,15 +430,36 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(str(exc), 5000)
 
     def _save_settings(self) -> None:
+        # 解析场地ID
+        try:
+            venue_site_id = int(self.settings_site_input.text().strip() or "57")
+        except ValueError:
+            venue_site_id = 57
+
+        # 解析日期
+        date_text = self.settings_date_input.currentText()
+        if date_text == "今天":
+            default_date = QDate.currentDate().toString("yyyy-MM-dd")
+        elif date_text == "明天":
+            default_date = QDate.currentDate().addDays(1).toString("yyyy-MM-dd")
+        else:
+            # MM-dd 格式
+            month, day = map(int, date_text.split("-"))
+            today = QDate.currentDate()
+            candidate = QDate(today.year(), month, day)
+            if candidate.isValid() and candidate < today:
+                candidate = candidate.addYears(1)
+            default_date = candidate.toString("yyyy-MM-dd") if candidate.isValid() else today.toString("yyyy-MM-dd")
+
         state = SettingsFormState(
             profile_name=self._current_profile(),
             display_name=self.display_name_input.text().strip(),
             phone=self.phone_input.text().strip(),
             buddy_ids=self.buddy_input.text().strip(),
-            venue_site_id=self.settings_site_input.value(),
-            default_search_date=self.settings_date_input.date().toString("yyyy-MM-dd"),
-            start_time=self.settings_start_input.time().toString("HH:mm"),
-            slot_count=self.settings_slot_input.value(),
+            venue_site_id=venue_site_id,
+            default_search_date=default_date,
+            start_time=self.settings_start_input.currentText(),
+            slot_count=self.settings_slot_input.currentIndex() + 1,
         )
         if hasattr(self.controller, "request_save_settings"):
             generation = self.controller.request_save_settings(state)
@@ -591,6 +655,6 @@ class MainWindow(QMainWindow):
             self.poll_dialog.hide()
         if self.panel_dialog.isVisible():
             self.panel_dialog.close()
-        if self.board_dialog.isVisible():
-            self.board_dialog.close()
+        if self.board_panel.isVisible():
+            self.board_panel.close()
         super().closeEvent(event)

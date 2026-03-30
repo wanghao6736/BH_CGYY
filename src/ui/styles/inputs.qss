@@ -290,3 +290,51 @@ PopupList QListWidget#popupListView QScrollBar::sub-page {
     background: none;
     height: 0px;
 }
+
+/* === 自定义输入框 (CustomLineEdit) === */
+CustomLineEdit {
+    min-height: 24px;
+    background: transparent;
+    border: none;
+}
+
+CustomLineEdit > QLineEdit#innerLineEdit {
+    min-height: 24px;
+    padding: 0 8px;
+    border: 1px solid #E5E7EB;
+    border-radius: 4px;
+    background: #FFFFFF;
+    color: #374151;
+    font-size: 11px;
+}
+
+CustomLineEdit > QLineEdit#innerLineEdit:hover {
+    border-color: #D1D5DB;
+    background: #F9FAFB;
+}
+
+CustomLineEdit > QLineEdit#innerLineEdit:focus {
+    border: 1px solid #0EA5A4;
+    background: #FFFFFF;
+}
+
+CustomLineEdit > QLineEdit#innerLineEdit:disabled {
+    background: #F3F4F6;
+    color: #9CA3AF;
+}
+
+CustomLineEdit > QLineEdit#innerLineEdit::placeholder {
+    color: #9CA3AF;
+}
+
+CustomLineEdit > QToolButton#clearButton {
+    background: transparent;
+    border: none;
+    color: #9CA3AF;
+    font-size: 10px;
+    padding: 0 4px;
+}
+
+CustomLineEdit > QToolButton#clearButton:hover {
+    color: #6B7280;
+}

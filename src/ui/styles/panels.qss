@@ -194,3 +194,35 @@ QLabel[statusDot="error"] {
     background: #EF4444;
     border-radius: 3px;
 }
+
+/* === 详情热力图面板 (BoardPanel) === */
+QWidget[boardPanel="true"] {
+    background: transparent;
+    border: none;
+}
+
+QFrame[boardPanelBody="true"] {
+    background: #FFFFFF;
+    border: 1px solid #E5E7EB;
+    border-radius: 8px;
+}
+
+QFrame[boardPanelBody="true"] QLabel[role="subtitle"] {
+    font-size: 12px;
+    font-weight: 500;
+    color: #111827;
+}
+
+QFrame[boardPanelBody="true"] QLabel[role="muted"] {
+    font-size: 10px;
+    color: #9CA3AF;
+}
+
+QFrame[boardPanelBody="true"] QLabel[summary="true"] {
+    background: #F9FAFB;
+    border: 1px solid #E5E7EB;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 10px;
+    color: #374151;
+}
