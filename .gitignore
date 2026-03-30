@@ -1,5 +1,7 @@
 **/.idea/
 **/.vscode/
+**/.cursor/
+**/.claude/
 **/.pytest_cache/
 **/__pycache__/
 **/.pytest_cache/

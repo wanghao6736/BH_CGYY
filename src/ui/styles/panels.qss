@@ -1,0 +1,196 @@
+/* CGYY Workbench - 面板和卡片样式 */
+
+/* === 基础卡片 === */
+QFrame[card="true"],
+QDialog[card="true"] {
+    background: #FFFFFF;
+    border: 1px solid #E5E7EB;
+    border-radius: 8px;
+}
+
+/* === 紧凑工具栏 === */
+QFrame[compact_toolbar="true"] {
+    background: #FFFFFF;
+    border: 1px solid #E5E7EB;
+    border-radius: 8px;
+}
+
+/* === 操作栏 === */
+QFrame[action_bar="true"] {
+    background: #FFFFFF;
+    border: none;
+    border-radius: 8px;
+}
+
+/* === 标签页 === */
+QTabWidget::pane {
+    border: 1px solid #E5E7EB;
+    border-radius: 8px;
+    background: #FFFFFF;
+    margin-top: -1px;
+}
+
+QTabWidget::tab-bar {
+    left: 0;
+}
+
+QTabBar::tab {
+    background: transparent;
+    color: #6B7280;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 8px 16px;
+    margin-right: 4px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+QTabBar::tab:hover {
+    color: #111827;
+}
+
+QTabBar::tab:selected {
+    color: #111827;
+    border-bottom: 2px solid #0EA5A4;
+}
+
+/* === 对话框 === */
+QDialog {
+    background: #FFFFFF;
+    border-radius: 12px;
+}
+
+/* === 轮询弹窗 (PollDialog) === */
+QWidget[pollDialog="true"],
+QDialog[pollDialog="true"] {
+    background: transparent;
+    border: none;
+}
+
+QFrame[pollDialogBody="true"] {
+    background: #FFFFFF;
+    border: 1px solid #E5E7EB;
+    border-radius: 8px;
+}
+
+QFrame[pollDialogBody="true"] QLabel {
+    font-size: 10px;
+    color: #6B7280;
+}
+
+QFrame[pollDialogBody="true"] QPushButton#startButton {
+    background: #0EA5A4;
+    color: #FFFFFF;
+    border: none;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 500;
+    padding: 0 12px;
+    min-height: 26px;
+}
+
+QFrame[pollDialogBody="true"] QPushButton#startButton:hover {
+    background: #0C9392;
+}
+
+QFrame[pollDialogBody="true"] QPushButton#startButton:pressed {
+    background: #0A8281;
+}
+
+/* === 场地表格弹窗 (BoardDialog) === */
+QDialog[boardDialog="true"] {
+    background: #FFFFFF;
+    border: 1px solid #E5E7EB;
+    border-radius: 8px;
+}
+
+QDialog[boardDialog="true"] QLabel[role="subtitle"] {
+    font-size: 12px;
+    font-weight: 500;
+    color: #111827;
+}
+
+QDialog[boardDialog="true"] QLabel[role="muted"] {
+    font-size: 10px;
+    color: #9CA3AF;
+}
+
+QDialog[boardDialog="true"] QLabel[summary="true"] {
+    background: #F9FAFB;
+    border: 1px solid #E5E7EB;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 10px;
+    color: #374151;
+}
+
+/* === 设置面板 (PanelDialog) === */
+QDialog[panelDialog="true"] {
+    background: #FFFFFF;
+    border: 1px solid #E5E7EB;
+    border-radius: 8px;
+}
+
+QDialog[panelDialog="true"] QTabWidget::pane {
+    border: 1px solid #E5E7EB;
+    border-radius: 6px;
+    background: #FFFFFF;
+    margin-top: -1px;
+}
+
+QDialog[panelDialog="true"] QTabBar::tab {
+    background: transparent;
+    color: #6B7280;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 8px 16px;
+    font-size: 11px;
+}
+
+QDialog[panelDialog="true"] QTabBar::tab:selected {
+    color: #111827;
+    border-bottom: 2px solid #0EA5A4;
+}
+
+/* === 预约参数卡片 (BookingCard) === */
+QFrame[bookingCard="true"] {
+    background: #FAFAFA;
+    border: none;
+}
+
+QFrame[bookingCard="true"] QLabel[role="label"] {
+    font-size: 10px;
+    color: #6B7280;
+    background: transparent;
+}
+
+QFrame[bookingCard="true"] QLabel[summary="true"] {
+    background: #FFFFFF;
+    border: 1px solid #E5E7EB;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 10px;
+    color: #374151;
+}
+
+/* === 顶部工具栏 (TopToolbar) === */
+QFrame[topToolbar="true"] {
+    background: #FFFFFF;
+    border-bottom: 1px solid #E5E7EB;
+}
+
+/* 状态圆点 */
+QLabel[statusDot="ok"] {
+    background: #10B981;
+    border-radius: 3px;
+}
+
+QLabel[statusDot="active"] {
+    background: #0EA5A4;
+    border-radius: 3px;
+}
+
+QLabel[statusDot="error"] {
+    background: #EF4444;
+    border-radius: 3px;
+}

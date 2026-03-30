@@ -13,7 +13,7 @@ from src.core.exceptions import BuddyConfigError, CaptchaError, QueryError
 from src.core.reservation_service import ReservationResult, ReservationService
 from src.core.selection_strategies import apply_pipeline
 from src.parsers.day_info import DayInfoParsed, SiteParam
-from src.parsers.slot_filter import SlotSolution, find_solutions
+from src.parsers.slot_filter import SlotChoice, SlotSolution, find_solutions
 
 if TYPE_CHECKING:
     from src.config.settings import ApiSettings, UserSettings
@@ -146,6 +146,116 @@ class ReservationWorkflow:
 
     # ------------------------------------------------------------------
 
+    def _make_slot_solution(
+        self,
+        info: DayInfoParsed,
+        book_date: str,
+        *,
+        space_id: int,
+        start_time: str,
+        slot_count: int,
+    ) -> SlotSolution:
+        sorted_slots = sorted(info.time_slots, key=lambda item: item.begin_time)
+        start_index = next((idx for idx, item in enumerate(sorted_slots) if item.begin_time == start_time), None)
+        if start_index is None:
+            raise QueryError(f"未找到开始时间 {start_time}")
+        end_index = start_index + slot_count
+        if end_index > len(sorted_slots):
+            raise QueryError(f"{start_time} 起不足 {slot_count} 个连续时段")
+
+        schedule = next(
+            (item for item in info.space_schedules_by_date.get(book_date, []) if item.space_id == space_id),
+            None,
+        )
+        if schedule is None:
+            raise QueryError(f"未找到场地 id={space_id}")
+
+        selected_slots = sorted_slots[start_index:end_index]
+        choices: list[SlotChoice] = []
+        total_minutes = 0
+        for item in selected_slots:
+            state = schedule.slots.get(str(item.id))
+            if state is None or not state.is_available:
+                raise QueryError(
+                    f"场地 {schedule.space_name} 在 {item.begin_time}-{item.end_time} 不可预约"
+                )
+            choices.append(
+                SlotChoice(
+                    space_id=schedule.space_id,
+                    time_id=item.id,
+                    space_name=schedule.space_name,
+                    start_time=item.begin_time,
+                    end_time=item.end_time,
+                    order_fee=float(state.order_fee or 0),
+                )
+            )
+            start_m, end_m = item.begin_time.split(":"), item.end_time.split(":")
+            total_minutes += (int(end_m[0]) * 60 + int(end_m[1])) - (int(start_m[0]) * 60 + int(start_m[1]))
+
+        total_fee = sum(item.order_fee for item in choices)
+        return SlotSolution(
+            choices=choices,
+            total_fee=total_fee,
+            slot_count=len(choices),
+            total_hours=round(total_minutes / 60, 1),
+        )
+
+    def _submit_solution(
+        self,
+        info: DayInfoParsed,
+        book_date: str,
+        solution: SlotSolution,
+    ) -> FullReservationResult:
+        reservation_order_json = json.dumps(
+            [{"spaceId": str(c.space_id), "timeId": str(c.time_id)} for c in solution.choices],
+            separators=(",", ":"),
+        )
+        buddy_ids = self._resolve_buddy_ids(info)
+        order_price = int(round(solution.total_fee))
+        captcha_data, captcha_result = self._verify_captcha_with_retry()
+        logger.info("提交订单... date=%s", book_date)
+        reservation_result = self.reservation_service.submit_reservation(
+            captcha_token=captcha_data.token,
+            captcha_verification=captcha_result.verification.verify_json,
+            reservation_date=book_date,
+            week_start_date=book_date,
+            reservation_order_json=reservation_order_json,
+            buddy_ids=buddy_ids,
+            order_price=order_price,
+        )
+        return FullReservationResult(
+            captcha=captcha_result,
+            reservation=reservation_result,
+            solutions=[solution],
+            site_param=info.site_param,
+            reservation_date=book_date,
+        )
+
+    def run_selected_reservation(
+        self,
+        *,
+        search_date: str,
+        space_id: int,
+        start_time: str,
+        slot_count: int,
+    ) -> FullReservationResult:
+        info, book_date, _ = self.get_solutions(
+            ReservationQuery(
+                date=search_date,
+                start_time=start_time,
+                slot_count=slot_count,
+                show_order_param=False,
+            )
+        )
+        solution = self._make_slot_solution(
+            info,
+            book_date,
+            space_id=space_id,
+            start_time=start_time,
+            slot_count=slot_count,
+        )
+        return self._submit_solution(info, book_date, solution)
+
     def run_full_reservation(self, search_date: str | None = None) -> FullReservationResult:
         date = search_date or self.api_settings.default_search_date
         query = ReservationQuery(
@@ -163,33 +273,4 @@ class ReservationWorkflow:
 
         first_solution = solutions[0]
         logger.info("找到 %d 个可预约方案，使用第 1 个 (总价=%.2f)", len(solutions), first_solution.total_fee)
-        reservation_order_json = json.dumps(
-            [{"spaceId": str(c.space_id), "timeId": str(c.time_id)} for c in first_solution.choices],
-            separators=(",", ":"),
-        )
-
-        # 2) 确定同伴
-        buddy_ids = self._resolve_buddy_ids(info)
-        order_price = int(round(first_solution.total_fee))
-
-        # 3) 验证码校验（含重试）
-        captcha_data, captcha_result = self._verify_captcha_with_retry()
-
-        # 4) 提交订单
-        logger.info("提交订单... date=%s", book_date)
-        reservation_result = self.reservation_service.submit_reservation(
-            captcha_token=captcha_data.token,
-            captcha_verification=captcha_result.verification.verify_json,
-            reservation_date=book_date,
-            week_start_date=book_date,
-            reservation_order_json=reservation_order_json,
-            buddy_ids=buddy_ids,
-            order_price=order_price,
-        )
-        return FullReservationResult(
-            captcha=captcha_result,
-            reservation=reservation_result,
-            solutions=solutions,
-            site_param=info.site_param,
-            reservation_date=book_date,
-        )
+        return self._submit_solution(info, book_date, first_solution)

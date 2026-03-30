@@ -1,0 +1,71 @@
+/* CGYY Workbench - 徽章和状态指示样式 */
+
+/* === 基础徽章 === */
+QLabel[badge="true"] {
+    background: #F3F4F6;
+    color: #374151;
+    border: none;
+    border-radius: 10px;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+/* === 认证状态 === */
+QLabel[badge_variant="auth_ok"] {
+    background: #ECFDF5;
+    color: #059669;
+}
+
+QLabel[badge_variant="auth_warn"] {
+    background: #FEF3C7;
+    color: #D97706;
+}
+
+QLabel[badge_variant="auth_error"] {
+    background: #FEF2F2;
+    color: #DC2626;
+}
+
+/* === 轮询状态 === */
+QLabel[badge_variant="polling"] {
+    background: rgba(14, 165, 164, 0.1);
+    color: #0EA5A4;
+}
+
+/* === 状态指示点 (极小圆点) === */
+QLabel[dot="true"] {
+    min-width: 8px;
+    max-width: 8px;
+    min-height: 8px;
+    max-height: 8px;
+    border-radius: 4px;
+    padding: 0;
+    background: #9CA3AF;
+}
+
+QLabel[dot="ok"] {
+    background: #10B981;
+}
+
+QLabel[dot="warn"] {
+    background: #F59E0B;
+}
+
+QLabel[dot="error"] {
+    background: #EF4444;
+}
+
+QLabel[dot="active"] {
+    background: #0EA5A4;
+}
+
+/* === 摘要标签 === */
+QLabel[summary="true"] {
+    color: #374151;
+    background: #FFFFFF;
+    border: 1px solid #E5E7EB;
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 11px;
+}
