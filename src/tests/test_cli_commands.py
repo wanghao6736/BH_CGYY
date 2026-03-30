@@ -2,6 +2,7 @@ from argparse import Namespace
 from pathlib import Path
 
 from src.cli.commands import run_profile
+from src.cli.handlers.shared import get_profile_name_from_env_path
 from src.config.profiles import ProfileManager
 
 
@@ -89,3 +90,8 @@ def test_run_profile_cleanup_legacy_sso_unsets_username_and_password(tmp_path: P
     assert "CGYY_SSO_PASSWORD" not in content
     assert "CGYY_PHONE=13800138000" in content
     assert "legacy SSO 清理" in out
+
+
+def test_get_profile_name_from_env_path_strips_env_suffix() -> None:
+    assert get_profile_name_from_env_path(".env") == "default"
+    assert get_profile_name_from_env_path("alice.env") == "alice"

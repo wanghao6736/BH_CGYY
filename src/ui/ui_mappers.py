@@ -156,10 +156,11 @@ def build_selection_state(
 
 def build_reserve_request(
     profile_name: str,
-    display_name: str,
     booking_state: BookingFormState,
     board_state: BoardState | None,
     selection_state: SelectionState | None,
+    *,
+    display_name: str = "",
 ) -> ReserveRequest | None:
     solution = resolve_reservable_solution(board_state, selection_state)
     if board_state is None or solution is None:
@@ -167,10 +168,10 @@ def build_reserve_request(
 
     return ReserveRequest(
         profile_name=profile_name,
-        display_name=display_name,
         venue_site_id=booking_state.venue_site_id,
         date=board_state.date,
         solution=solution,
+        display_name=display_name,
     )
 
 

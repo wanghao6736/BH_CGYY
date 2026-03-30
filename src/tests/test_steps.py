@@ -26,7 +26,10 @@ from src.main import build_app
 
 
 def step_fetch_captcha() -> None:
-    workflow, _ = build_app()
+    services = build_app()
+    workflow = services.workflow
+    if workflow is None:
+        raise RuntimeError("workflow 初始化失败")
     captcha_data = workflow.captcha_service.fetch_captcha()
     print("secret_key:", captcha_data.secret_key)
     print("token:", captcha_data.token)
@@ -36,7 +39,10 @@ def step_fetch_captcha() -> None:
 
 def step_verify_captcha() -> None:
     api_settings, _, _, _ = load_settings()
-    workflow, _ = build_app()
+    services = build_app()
+    workflow = services.workflow
+    if workflow is None:
+        raise RuntimeError("workflow 初始化失败")
     captcha_data = workflow.captcha_service.fetch_captcha()
     time.sleep(random.uniform(api_settings.captcha_delay_min, api_settings.captcha_delay_max))
     result = workflow.captcha_service.verify_captcha(captcha_data)
@@ -47,7 +53,10 @@ def step_verify_captcha() -> None:
 
 
 def step_info() -> None:
-    workflow, _ = build_app()
+    services = build_app()
+    workflow = services.workflow
+    if workflow is None:
+        raise RuntimeError("workflow 初始化失败")
     success, message, slots = workflow.reservation_service.get_info_parsed()
     print("day info success:", success)
     print("day info message:", message)
@@ -55,7 +64,10 @@ def step_info() -> None:
 
 
 def step_order_detail() -> None:
-    workflow, _ = build_app()
+    services = build_app()
+    workflow = services.workflow
+    if workflow is None:
+        raise RuntimeError("workflow 初始化失败")
     success, message, order_detail = workflow.reservation_service.get_order_detail_parsed("D260306000729")
     print("order detail success:", success)
     print("order detail message:", message)
@@ -63,7 +75,10 @@ def step_order_detail() -> None:
 
 
 def step_full() -> None:
-    workflow, _ = build_app()
+    services = build_app()
+    workflow = services.workflow
+    if workflow is None:
+        raise RuntimeError("workflow 初始化失败")
     success, message, submit = workflow.reservation_service.submit_reservation()
     print("submit success:", success)
     print("submit message:", message)

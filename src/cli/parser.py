@@ -1,4 +1,4 @@
-"""CGYY CLI 参数解析。子命令：reserve（默认）, info, catalog, fetch-captcha, verify-captcha, order-detail, cancel-order, login, auth-status, logout, profile。"""
+"""CGYY CLI 参数解析。子命令：reserve（默认）, info, catalog, config-doctor, fetch-captcha, verify-captcha, order-detail, cancel-order, login, auth-status, logout, profile。"""
 from __future__ import annotations
 
 import argparse
@@ -99,6 +99,14 @@ def build_parser() -> argparse.ArgumentParser:
     ]:
         subp = sub.add_parser(name, help=help_text)
         _add_common_options(subp)
+
+    doctor_parser = sub.add_parser("config-doctor", help="诊断当前 profile 配置与鉴权状态")
+    _add_profile_option(doctor_parser)
+    doctor_parser.add_argument(
+        "--probe",
+        action="store_true",
+        help="额外发起一次鉴权探活请求",
+    )
 
     profile_parser = sub.add_parser("profile", help="管理 profile 配置")
     profile_sub = profile_parser.add_subparsers(dest="profile_cmd", required=True, help="profile 子命令")

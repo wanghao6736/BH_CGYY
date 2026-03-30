@@ -8,7 +8,6 @@ STYLE_FILES = [
     "inputs.qss",
     "badges.qss",
     "panels.qss",
-    "table.qss",
 ]
 
 

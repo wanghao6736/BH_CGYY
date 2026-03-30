@@ -3,7 +3,7 @@
 This repository contains a Python command-line application for interacting with
 an external web service through a layered architecture. It combines typed
 configuration loading, authenticated HTTP flows, response parsing, workflow
-orchestration, and terminal-oriented output.
+orchestration, terminal-oriented output, and a PySide6 desktop workbench.
 
 ## Highlights
 
@@ -11,7 +11,9 @@ orchestration, and terminal-oriented output.
 - Layered HTTP clients for signed API requests and SSO page flows
 - Authentication pipeline with automatic refresh and per-profile credential persistence
 - Parsing, workflow, and presentation layers kept separate
-- Command-line entry points plus helper shell scripts for repeated execution
+- Command-line entry points plus a desktop UI (`cgyy-ui`)
+- Unified notification support for macOS and Bark/iOS
+- Helper shell scripts for repeated execution and polling
 
 ## Requirements
 
@@ -46,13 +48,29 @@ Or, if installed:
 cgyy
 ```
 
+Launch the desktop workbench:
+
+```bash
+python -m src.ui.main
+```
+
+Or, if installed:
+
+```bash
+cgyy-ui
+```
+
 Pass `--help` for the available commands:
 
 ```bash
 cgyy --help
 ```
 
-Detailed operator notes can be kept locally under `docs/` when needed.
+The CLI includes profile management, auth maintenance, reservation flows, and
+configuration diagnostics such as `config-doctor`.
+
+Detailed operator notes are maintained under `docs/`, especially
+[`docs/readme.md`](docs/readme.md).
 
 ## Project Structure
 
@@ -64,12 +82,14 @@ src/
 ├── config/        # Typed settings and .env read/write helpers
 ├── core/          # Domain workflows and selection strategies
 ├── http/          # Shared HTTP transport helpers
+├── notifier.py    # Shared macOS / Bark notification entry point
 ├── parsers/       # Pure response parsers
 ├── presenters/    # Terminal formatting helpers
 ├── sso/           # SSO page flow and service adapters
+├── ui/            # PySide6 desktop workbench
 ├── tests/         # Automated tests
 └── utils/         # Shared utilities
-scripts/           # Shell helpers
+scripts/           # Shell helpers and polling wrappers
 docs/              # Detailed documentation
 ```
 

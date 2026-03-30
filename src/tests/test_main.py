@@ -5,8 +5,10 @@ import pytest
 from src.config.env_store import EnvStore
 from argparse import Namespace
 
+from src.cli.commands import run as run_command
 from src.config.settings import ApiSettings, UserSettings
-from src.main import main, merge_cli_overrides
+from src.main import (build_command_context, classify_command, main,
+                      merge_cli_overrides, parse_cli_args)
 
 
 def test_merge_cli_overrides_ignores_missing_business_args_for_profile_command() -> None:
@@ -98,3 +100,226 @@ def test_main_profile_modify_skips_settings_load_for_encrypted_default_profile(
     main()
 
     assert "CGYY_DISPLAY_NAME=Alice\n" in profile_env.read_text(encoding="utf-8")
+
+
+def test_classify_command_splits_execution_paths() -> None:
+    assert classify_command("logout") == "settings_free"
+    assert classify_command("profile") == "settings_free"
+    assert classify_command("login") == "settings_only"
+    assert classify_command("auth-status") == "settings_only"
+    assert classify_command("config-doctor") == "settings_only"
+    assert classify_command("reserve") == "full"
+
+
+def test_parse_cli_args_uses_real_parser_and_validator() -> None:
+    args = parse_cli_args(
+        [
+            "reserve",
+            "-P",
+            "default",
+            "-d",
+            "2026/3/30",
+            "-s",
+            "9.5",
+            "-n",
+            "2",
+        ]
+    )
+
+    assert args.cmd == "reserve"
+    assert args.profile == "default"
+    assert args.date == "2026-03-30"
+    assert args.start_time == "09:30"
+    assert args.duration == 2
+
+
+def test_main_logout_does_not_load_settings_or_build_services(monkeypatch: pytest.MonkeyPatch) -> None:
+    class Parser:
+        def parse_args(self) -> Namespace:
+            return Namespace(cmd="logout", profile="default")
+
+    monkeypatch.setattr("src.main._setup_logging", lambda: None)
+    monkeypatch.setattr("src.main.build_parser", lambda: Parser())
+    monkeypatch.setattr("src.main.validate_and_normalize_args", lambda args: args)
+    monkeypatch.setattr("src.main.build_env_store", lambda *args, **kwargs: object())
+    monkeypatch.setattr("src.main.ProfileManager", lambda *args, **kwargs: object())
+    monkeypatch.setattr("src.main.load_settings", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("load_settings should not run")))
+    monkeypatch.setattr("src.main.build_app", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("build_app should not run")))
+    monkeypatch.setattr("src.main.AuthManager", lambda *args, **kwargs: object())
+    monkeypatch.setattr("src.main.run_command", lambda context, args: None)
+
+    main()
+
+
+def test_build_command_context_for_login_skips_service_build(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    args = Namespace(cmd="login", profile="default")
+
+    monkeypatch.setattr("src.main.load_settings", lambda *args, **kwargs: (ApiSettings(), UserSettings(), object(), object()))
+    monkeypatch.setattr("src.main.AuthManager", lambda *args, **kwargs: "auth-manager")
+    monkeypatch.setattr("src.main.ProfileManager", lambda *args, **kwargs: "profile-manager")
+    monkeypatch.setattr("src.main.build_app", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("build_app should not run")))
+    monkeypatch.setattr("src.main.build_env_store", lambda *args, **kwargs: "env-store")
+
+    context = build_command_context(args, environ={})
+
+    assert context.auth_manager == "auth-manager"
+    assert context.profile_manager == "profile-manager"
+    assert context.services.workflow is None
+    assert context.services.catalog_service is None
+
+
+def test_build_command_context_respects_explicit_empty_environ(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    args = Namespace(cmd="logout", profile=None)
+
+    monkeypatch.setenv("CGYY_PROFILE", "alice")
+    monkeypatch.setattr("src.main.build_env_store", lambda *args, **kwargs: "env-store")
+    monkeypatch.setattr("src.main.ProfileManager", lambda *args, **kwargs: "profile-manager")
+    monkeypatch.setattr("src.main.AuthManager", lambda *args, **kwargs: "auth-manager")
+
+    context = build_command_context(args, environ={})
+
+    assert context.active_profile == "default"
+    assert context.runtime_environ == {}
+
+
+def test_build_command_context_for_config_doctor_skips_service_build(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    args = Namespace(cmd="config-doctor", profile="default", probe=False)
+
+    monkeypatch.setattr("src.main.load_settings", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("load_settings should not run")))
+    monkeypatch.setattr("src.main.AuthManager", lambda *args, **kwargs: "auth-manager")
+    monkeypatch.setattr("src.main.ProfileManager", lambda *args, **kwargs: "profile-manager")
+    monkeypatch.setattr("src.main.build_app", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("build_app should not run")))
+    monkeypatch.setattr("src.main.build_env_store", lambda *args, **kwargs: "env-store")
+
+    context = build_command_context(args, environ={})
+
+    assert context.auth_manager == "auth-manager"
+    assert context.profile_manager == "profile-manager"
+    assert context.services.workflow is None
+    assert context.services.catalog_service is None
+
+
+def test_main_smoke_uses_real_parser_and_dispatches_profile_list(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured = []
+
+    monkeypatch.setattr("src.main._setup_logging", lambda: None)
+    monkeypatch.setattr("src.main.AuthManager", lambda *args, **kwargs: "auth-manager")
+    monkeypatch.setattr("src.main.ProfileManager", lambda *args, **kwargs: "profile-manager")
+    monkeypatch.setattr("src.main.build_env_store", lambda *args, **kwargs: "env-store")
+    monkeypatch.setattr(
+        "src.main.run_command",
+        lambda context, args: captured.append((context, args)),
+    )
+
+    main(["profile", "list"])
+
+    assert len(captured) == 1
+    context, args = captured[0]
+    assert args.cmd == "profile"
+    assert args.profile_cmd == "list"
+    assert context.active_profile == "default"
+    assert context.auth_manager == "auth-manager"
+    assert context.profile_manager == "profile-manager"
+
+
+def test_run_command_dispatches_via_registry_defaulting_to_reserve(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured = []
+
+    monkeypatch.setattr(
+        "src.cli.commands.get_handler",
+        lambda cmd: (lambda context, args: captured.append((cmd, context, args))),
+    )
+
+    context = object()
+    args = Namespace(cmd=None)
+
+    run_command(context, args)
+
+    assert len(captured) == 1
+    assert captured[0][0] == "reserve"
+
+
+def test_main_config_doctor_smoke_uses_real_parser_and_handler(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    default_env = tmp_path / ".env"
+    default_env.write_text(
+        "\n".join(
+            [
+                "CGYY_BASE_URL=https://example.invalid",
+                "CGYY_PREFIX=prefix",
+                "CGYY_APP_KEY=app-key",
+                "CGYY_AES_CBC_KEY=0123456789abcdef",
+                "CGYY_AES_CBC_IV=0123456789abcdef",
+                "CGYY_PHONE=13800138000",
+                "CGYY_VENUE_SITE_ID=57",
+                "CGYY_RESERVATION_SLOT_COUNT=2",
+                "CGYY_SELECTION_STRATEGY=same_first_digit",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr("src.main._setup_logging", lambda: None)
+    monkeypatch.setattr(
+        "src.main.build_env_store",
+        lambda name, environ=None: __import__("src.config.profiles", fromlist=["build_env_store"]).build_env_store(
+            name,
+            root=tmp_path,
+            environ=environ,
+        ),
+    )
+    monkeypatch.setattr(
+        "src.main.ProfileManager",
+        lambda *args, **kwargs: __import__("src.config.profiles", fromlist=["ProfileManager"]).ProfileManager(
+            root=tmp_path,
+            environ=kwargs.get("environ") or {},
+        ),
+    )
+
+    main(["config-doctor"])
+
+    out = capsys.readouterr().out
+    assert "[成功] 配置诊断" in out
+    assert "CGYY_BASE_URL: https://example.invalid" in out
+
+
+def test_main_config_doctor_reports_bad_settings_instead_of_crashing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    default_env = tmp_path / ".env"
+    default_env.write_text("CGYY_VENUE_SITE_ID=abc\n", encoding="utf-8")
+
+    monkeypatch.setattr("src.main._setup_logging", lambda: None)
+    monkeypatch.setattr(
+        "src.main.build_env_store",
+        lambda name, environ=None: __import__("src.config.profiles", fromlist=["build_env_store"]).build_env_store(
+            name,
+            root=tmp_path,
+            environ=environ,
+        ),
+    )
+    monkeypatch.setattr(
+        "src.main.ProfileManager",
+        lambda *args, **kwargs: __import__("src.config.profiles", fromlist=["ProfileManager"]).ProfileManager(
+            root=tmp_path,
+            environ=kwargs.get("environ") or {},
+        ),
+    )
+
+    main(["config-doctor"])
+
+    out = capsys.readouterr().out
+    assert "[失败] 配置诊断" in out
+    assert "CGYY_VENUE_SITE_ID" in out
