@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from src.notifier import build_submit_notification_message
 from src.ui.state import (BoardState, BookingFormState, PollingState,
                           PollingStatus, ReserveOutcome, SelectionState,
                           SessionState, SessionStatus, SettingsFormState,
@@ -242,9 +243,25 @@ class WindowPresenter:
             return
         self.set_reserve_busy(False)
         message = result.message or "预约完成"
+        status_message = message
         if result.trade_no:
-            message = f"{message} / {result.trade_no}"
-        self._show_status_message(message, 5000)
+            status_message = f"{message} / {result.trade_no}"
+        self._show_status_message(status_message, 5000)
+        if result.success:
+            window.controller.request_notification(
+                "CGYY 预约成功",
+                build_submit_notification_message(
+                    success=result.success,
+                    message=message,
+                    order_id=result.order_id,
+                    trade_no=result.trade_no,
+                    reservation_start_date=result.reservation_start_date,
+                    reservation_end_date=result.reservation_end_date,
+                    display_name=result.display_name,
+                    profile_name=result.profile_name,
+                ),
+                profile_name=result.profile_name or None,
+            )
 
     def handle_settings_saved(self, generation: int, state: SettingsFormState) -> None:
         window = self._window

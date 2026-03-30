@@ -14,8 +14,9 @@ from src.ui.form_options import build_date_options
 from src.ui.state import (BoardCell, BoardRow, BoardState, BoardStatus,
                           BookingFormState, BuddyOption, LoginFormState,
                           PollingConfigState, ProfileOption, SelectionState,
-                          PollingStatus, SessionState, SessionStatus, SettingsFormState,
-                          VenueCatalogItem, VenueCatalogState)
+                          PollingStatus, ReserveOutcome, SessionState,
+                          SessionStatus, SettingsFormState, VenueCatalogItem,
+                          VenueCatalogState)
 from src.ui.widgets.board_panel import BoardPanel
 from src.ui.widgets.booking_card import BookingCard
 from src.ui.widgets.login_panel import LoginWindow
@@ -46,6 +47,7 @@ class FakeController:
         self.settings_loaded = DummySignal()
         self.lane_busy_changed = DummySignal()
         self.lane_failed = DummySignal()
+        self.notification_requests = []
 
     def request_session_probe(self, profile_name: str) -> int:
         return 1
@@ -71,6 +73,15 @@ class FakeController:
 
     def request_logout(self, profile_name: str) -> int:
         return 5
+
+    def request_notification(
+        self,
+        title: str,
+        message: str,
+        *,
+        profile_name: str | None = None,
+    ) -> None:
+        self.notification_requests.append((title, message, profile_name))
 
 
 def _choice(space_id: int, time_id: int, space_name: str, start: str, end: str, fee: float = 25.0) -> SlotChoice:
@@ -771,6 +782,64 @@ def test_main_window_auto_reserves_when_polling_finds_recommended_solution() -> 
     assert len(controller.reserve_requests) == 1
     assert window.polling_coordinator.state.status is PollingStatus.STOPPED
     assert window._latest_reserve_generation == 7
+    window.close()
+
+
+def test_main_window_reserve_success_sends_notification_uses_result_context() -> None:
+    _app()
+
+    class FakeFacade:
+        def list_profiles(self):
+            return [ProfileOption(name="default", display_name="默认用户", auth_source="self", sso_source="self")]
+
+        def load_profile_form(self, profile_name: str) -> SettingsFormState:
+            return SettingsFormState(profile_name=profile_name)
+
+        def load_login_form(self, profile_name: str) -> LoginFormState:
+            return LoginFormState(profile_name=profile_name)
+
+    controller = FakeController()
+    window = MainWindow(FakeFacade(), controller=controller)
+    window.apply_session_state(
+        SessionState(
+            profile_name="default",
+            display_name="默认用户",
+            status=SessionStatus.AUTHENTICATED,
+        )
+    )
+    window._latest_reserve_generation = 7
+    window.apply_session_state(
+        SessionState(
+            profile_name="secondary",
+            display_name="次要用户",
+            status=SessionStatus.AUTHENTICATED,
+        )
+    )
+
+    window.handle_reserve_finished(
+        7,
+        ReserveOutcome(
+            success=True,
+            message="OK",
+            trade_no="D123",
+            order_id=456,
+            reservation_start_date="2026-04-01 18:00",
+            reservation_end_date="2026-04-01 19:00",
+            profile_name="default",
+            display_name="默认用户",
+        ),
+    )
+
+    assert controller.notification_requests == [
+        (
+            "CGYY 预约成功",
+            "✅ [成功] 提交订单：OK\n"
+            "   📌 订单ID 456 | 编号 D123\n"
+            "   🕐 预约时间 2026-04-01 18:00 ~ 2026-04-01 19:00\n"
+            "   👤 预定人 默认用户 | profile default",
+            "default",
+        )
+    ]
     window.close()
 
 

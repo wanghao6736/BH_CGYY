@@ -38,6 +38,7 @@ class ReserveRequest:
     venue_site_id: int
     date: str
     solution: SlotSolution
+    display_name: str = ""
 
 
 class UiFacade:
@@ -372,11 +373,16 @@ class UiFacade:
             solution=request.solution,
         )
         submit = result.reservation.submit_parsed
+        display_name = request.display_name or self._display_name_for_profile(request.profile_name)
         return ReserveOutcome(
             success=result.reservation.success,
             message=result.reservation.message,
             trade_no=submit.trade_no if submit else "",
             order_id=submit.order_id if submit else 0,
+            reservation_start_date=submit.reservation_start_date if submit else "",
+            reservation_end_date=submit.reservation_end_date if submit else "",
+            profile_name=request.profile_name,
+            display_name=display_name,
         )
 
 def build_board_state(

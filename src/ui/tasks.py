@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any, Callable
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -31,6 +34,22 @@ class _TaskWorker(QRunnable):
             self._runner._handle_finished(self._spec)
 
 
+class _BackgroundWorker(QRunnable):
+    def __init__(self, fn: Callable[[], Any], *, label: str = "") -> None:
+        super().__init__()
+        self._fn = fn
+        self._label = label
+
+    def run(self) -> None:
+        try:
+            self._fn()
+        except Exception:  # pragma: no cover - defensive logging only
+            if self._label:
+                logger.exception("后台任务失败 task=%s", self._label)
+            else:
+                logger.exception("后台任务失败")
+
+
 class UiTaskRunner(QObject):
     result_ready = Signal(str, int, object)
     error_ready = Signal(str, int, str)
@@ -53,6 +72,9 @@ class UiTaskRunner(QObject):
 
         self._pool.start(_TaskWorker(self, spec))
         return True
+
+    def submit_background(self, fn: Callable[[], Any], *, label: str = "") -> None:
+        self._pool.start(_BackgroundWorker(fn, label=label))
 
     def _handle_result(self, spec: UiTaskSpec, payload: object) -> None:
         if self._latest_generation.get(spec.lane) != spec.generation:
