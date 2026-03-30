@@ -5,7 +5,7 @@ from PySide6.QtCore import QDate
 ANY_TIME_OPTION = "-"
 
 
-def build_date_options(*, today: QDate | None = None, days: int = 7) -> list[str]:
+def build_date_options(*, today: QDate | None = None, days: int = 3) -> list[str]:
     current_day = today or QDate.currentDate()
     options: list[str] = []
     for offset in range(days):

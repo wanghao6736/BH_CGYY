@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "buaa-cgyy"
-version = "2.0.0"
+version = "3.0.0"
 description = "BUAA CGYY 场地预约"
 readme = "README.md"
 requires-python = ">=3.9"

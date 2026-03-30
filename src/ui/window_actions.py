@@ -152,10 +152,10 @@ class WindowActions:
         window = self._window
         request = build_reserve_request(
             self.current_profile(),
-            window.session_state.display_name if window.session_state is not None else "",
             window.booking_card.collect_state(),
             window.board_state,
             window.selection_state,
+            display_name=window.session_state.display_name if window.session_state is not None else "",
         )
         if request is None:
             return

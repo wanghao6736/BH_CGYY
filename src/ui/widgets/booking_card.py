@@ -70,8 +70,8 @@ class BookingCard(QFrame):
         grid.setSpacing(4)  # 行间距、列间距
         grid.setContentsMargins(0, 0, 0, 0)
 
-        # 第一行：日期、时间、时长
-        row1_labels = ["🗓️ 日期", "🕐 时间", "🔢 时长"]
+        # 第一行：日期、时间、时段
+        row1_labels = ["🗓️ 日期", "🕐 时间", "🔢 时段"]
         row1_combos = [self.date_combo, self.time_combo, self.slot_combo]
 
         for col, (label_text, combo) in enumerate(zip(row1_labels, row1_combos)):

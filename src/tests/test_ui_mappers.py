@@ -252,6 +252,26 @@ def test_build_reserve_request_returns_none_for_partial_manual_selection() -> No
     assert request is None
 
 
+def test_build_reserve_request_accepts_optional_display_name_keyword() -> None:
+    board_state = _build_board_state(slot_count=2)
+
+    request = build_reserve_request(
+        "default",
+        BookingFormState(
+            date="2026-03-30",
+            start_time="18:30",
+            slot_count=2,
+            venue_site_id=57,
+        ),
+        board_state,
+        None,
+        display_name="Alice",
+    )
+
+    assert request is not None
+    assert request.display_name == "Alice"
+
+
 def test_resolve_effective_buddy_ids_preserves_selected_ids_within_buddy_max() -> None:
     board_state = _build_board_state()
     board_state.buddy_num_min = 1

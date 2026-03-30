@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 from argparse import Namespace
+from typing import Mapping
 
 from src.api.captcha_api import CaptchaApi
 from src.api.catalog_api import CatalogApi
@@ -11,6 +12,8 @@ from src.api.reservation_api import ReservationApi
 from src.auth.manager import AuthManager
 from src.cli.commands import get_cmd
 from src.cli.commands import run as run_command
+from src.cli.context import AppServices, CommandContext
+from src.cli.handlers.registry import get_command_kind, requires_trade_no
 from src.cli.parser import build_parser
 from src.cli.validators import CliValidationError, validate_and_normalize_args
 from src.config.profiles import (ProfileManager, build_env_store,
@@ -27,12 +30,6 @@ from src.utils.crypto_utils import AesCbcEncryptor
 from src.utils.sign_utils import SignBuilder
 
 logger = logging.getLogger(__name__)
-
-SETTINGS_FREE_COMMANDS = {"logout", "profile"}
-
-
-def _setup_logging() -> None:
-    setup_logging()
 
 
 def merge_cli_overrides(
@@ -75,7 +72,7 @@ def build_app(
     sso_settings: SsoSettings | None = None,
     env_store=None,
     ensure_auth: bool = True,
-) -> tuple[ReservationWorkflow, CatalogService]:
+) -> AppServices:
     if (
         api_settings is None
         or user_settings is None
@@ -129,30 +126,41 @@ def build_app(
         api_settings=api_settings,
         user_settings=user_settings,
     )
-    return workflow, catalog_service
+    return AppServices(workflow=workflow, catalog_service=catalog_service)
 
 
-def main() -> None:
-    _setup_logging()
-
+def parse_cli_args(argv: list[str] | None = None) -> Namespace:
     parser = build_parser()
-    args = parser.parse_args()
+    args = parser.parse_args() if argv is None else parser.parse_args(list(argv))
 
     try:
-        args = validate_and_normalize_args(args)
+        return validate_and_normalize_args(args)
     except CliValidationError as e:
-        logger.error("参数错误: %s", e)
-        print(format_request_result("参数检查", False, str(e)))
-        return
+        raise e
 
-    active_profile = normalize_profile_name(getattr(args, "profile", None), os.environ)
-    env_store = build_env_store(active_profile, environ=dict(os.environ))
-    profile_manager = ProfileManager(environ=dict(os.environ))
+
+def build_command_context(
+    args: Namespace,
+    *,
+    environ: Mapping[str, str] | None = None,
+) -> CommandContext:
+    runtime_environ = dict(os.environ if environ is None else environ)
+    active_profile = normalize_profile_name(getattr(args, "profile", None), runtime_environ)
+    env_store = build_env_store(active_profile, environ=runtime_environ)
+    profile_manager = ProfileManager(environ=runtime_environ)
     cmd = get_cmd(args)
-    if cmd in SETTINGS_FREE_COMMANDS:
+    command_kind = get_command_kind(cmd)
+
+    if command_kind == "settings_free" or cmd == "config-doctor":
         auth_manager = AuthManager(ApiSettings(), AuthSettings(), SsoSettings(), env_store=env_store)
-        run_command(None, None, auth_manager, profile_manager, args)
-        return
+        return CommandContext(
+            services=AppServices(),
+            auth_manager=auth_manager,
+            profile_manager=profile_manager,
+            env_store=env_store,
+            active_profile=active_profile,
+            runtime_environ=dict(runtime_environ),
+        )
 
     api_settings, user_settings, auth_settings, sso_settings = load_settings(
         active_profile,
@@ -160,10 +168,9 @@ def main() -> None:
     )
     merge_cli_overrides(args, api_settings, user_settings)
     auth_manager = AuthManager(api_settings, auth_settings, sso_settings, env_store=env_store)
-    workflow = None
-    catalog_service = None
-    if cmd not in ("login", "auth-status", "logout", "profile"):
-        workflow, catalog_service = build_app(
+    services = AppServices()
+    if command_kind == "full":
+        services = build_app(
             api_settings,
             user_settings,
             auth_settings,
@@ -172,11 +179,33 @@ def main() -> None:
             ensure_auth=True,
         )
 
-    if cmd in ("order-detail", "cancel-order") and not args.trade_no:
+    return CommandContext(
+        services=services,
+        auth_manager=auth_manager,
+        profile_manager=profile_manager,
+        env_store=env_store,
+        active_profile=active_profile,
+        runtime_environ=dict(runtime_environ),
+    )
+
+
+def main(argv: list[str] | None = None) -> None:
+    setup_logging()
+
+    try:
+        args = parse_cli_args(argv)
+    except CliValidationError as e:
+        logger.error("参数错误: %s", e)
+        print(format_request_result("参数检查", False, str(e)))
+        return
+
+    cmd = get_cmd(args)
+    if requires_trade_no(cmd) and not args.trade_no:
         print("❌ 请指定 --trade-no 订单编号")
         return
 
-    run_command(workflow, catalog_service, auth_manager, profile_manager, args)
+    context = build_command_context(args)
+    run_command(context, args)
 
 
 if __name__ == "__main__":

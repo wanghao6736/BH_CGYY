@@ -33,3 +33,13 @@ def test_parser_accepts_profile_cleanup_legacy_sso() -> None:
     assert args.cmd == "profile"
     assert args.profile_cmd == "cleanup-legacy-sso"
     assert args.name == "alice"
+
+
+def test_parser_accepts_config_doctor_probe() -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(["config-doctor", "-P", "alice", "--probe"])
+
+    assert args.cmd == "config-doctor"
+    assert args.profile == "alice"
+    assert args.probe is True

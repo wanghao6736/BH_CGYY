@@ -144,7 +144,7 @@ class UiFacade:
         user_settings.reservation_start_time = query.start_time
         user_settings.reservation_slot_count = query.slot_count
         self._apply_runtime_auth(profile_name, auth_settings)
-        workflow, _ = build_app(
+        services = build_app(
             api_settings=api_settings,
             user_settings=user_settings,
             auth_settings=auth_settings,
@@ -152,7 +152,7 @@ class UiFacade:
             env_store=env_store,
             ensure_auth=not query.skip_auth_probe,
         )
-        return workflow
+        return services.workflow
 
     def _build_catalog_service(self, profile_name: str, *, skip_auth_probe: bool = False) -> CatalogService:
         env_store = self._env_store(profile_name)
@@ -161,7 +161,7 @@ class UiFacade:
             env_store=env_store,
         )
         self._apply_runtime_auth(profile_name, auth_settings)
-        _, catalog_service = build_app(
+        services = build_app(
             api_settings=api_settings,
             user_settings=user_settings,
             auth_settings=auth_settings,
@@ -169,7 +169,9 @@ class UiFacade:
             env_store=env_store,
             ensure_auth=not skip_auth_probe,
         )
-        return catalog_service
+        if services.catalog_service is None:
+            raise RuntimeError("CatalogService 初始化失败")
+        return services.catalog_service
 
     def list_profiles(self) -> list[ProfileOption]:
         return [

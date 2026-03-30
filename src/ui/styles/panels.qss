@@ -198,6 +198,7 @@ QFrame[bookingCard="true"] QLabel[summary="true"] {
 QFrame[topToolbar="true"] {
     background: #FFFFFF;
     border-bottom: 1px solid #E5E7EB;
+    border-radius: 6px;
 }
 
 /* 状态圆点 */

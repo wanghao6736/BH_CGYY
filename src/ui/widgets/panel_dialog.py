@@ -98,7 +98,7 @@ class PanelDialog(QDialog):
         self.settings_site_input.setFixedWidth(70)
         self.settings_site_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        slot_label = QLabel("🕒 时段")
+        slot_label = QLabel("🔢 时段")
         self.settings_slot_input = CustomComboBox()
         self.settings_slot_input.addItems([f"{i}段" for i in range(1, 7)])
         self.settings_slot_input.setFixedWidth(80)
@@ -114,7 +114,7 @@ class PanelDialog(QDialog):
         self.settings_date_input.addItems(build_date_options())
         self.settings_date_input.setFixedWidth(80)
 
-        time_label = QLabel("⌚️ 时间")
+        time_label = QLabel("🕐 时间")
         self.settings_start_input = CustomComboBox()
         self.settings_start_input.addItems(build_time_options(include_any=True))
         apply_time_to_combo(self.settings_start_input, "")

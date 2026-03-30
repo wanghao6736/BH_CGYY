@@ -216,7 +216,8 @@ QCalendarWidget QSpinBox {
 
 /* === 自定义下拉框 (CustomComboBox) === */
 CustomComboBox {
-    min-height: 24px;
+    min-height: 26px;
+    max-height: 26px;
     background: transparent;
     border: none;
 }
@@ -260,6 +261,7 @@ PopupList QListWidget#popupListView::item {
     padding: 6px 10px;
     color: #374151;
     background: transparent;
+    border-radius: 6px;
 }
 
 PopupList QListWidget#popupListView::item:hover {
