@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from src.core.workflow import ReservationWorkflow
 
 logger = logging.getLogger(__name__)
+LEGACY_SSO_KEYS = ("CGYY_SSO_USERNAME", "CGYY_SSO_PASSWORD")
 
 
 def get_cmd(args: Namespace) -> str:
@@ -303,6 +304,17 @@ def run_logout(auth_manager: AuthManager) -> None:
         print(format_request_result("清理认证", False, str(e)))
 
 
+def _print_legacy_sso_notice(profile_name: str) -> None:
+    print(f"   💡 {profile_name} 中的 CGYY_SSO_USERNAME / CGYY_SSO_PASSWORD 仅供 CLI 自动化模式使用。")
+    print(f"   💡 GUI 登录已不再使用这两个字段，可执行 `python -m src.main profile cleanup-legacy-sso {profile_name}` 清理。")
+
+
+def _has_legacy_sso_values(profile_manager: ProfileManager, profile_name: str) -> bool:
+    values = profile_manager.show_profile(profile_name)
+    present = {item.key for item in values if item.value and item.value != "(missing)"}
+    return any(key in present for key in LEGACY_SSO_KEYS)
+
+
 def run_profile(profile_manager: ProfileManager, args: Namespace) -> None:
     try:
         cmd = getattr(args, "profile_cmd", "")
@@ -320,6 +332,8 @@ def run_profile(profile_manager: ProfileManager, args: Namespace) -> None:
             print(format_request_result("profile 详情", True, args.name))
             for item in values:
                 print(f"   - {item.key}={item.value} ({item.source})")
+            if any(item.key in LEGACY_SSO_KEYS and item.value for item in values):
+                _print_legacy_sso_notice(args.name)
             return
         if cmd == "add":
             path = profile_manager.add_profile(args.name, _parse_updates(args.set_values))
@@ -332,6 +346,20 @@ def run_profile(profile_manager: ProfileManager, args: Namespace) -> None:
                 unset_keys=list(args.unset_keys or []),
             )
             print(format_request_result("profile 修改", True, str(path)))
+            touched_keys = {item.split("=", 1)[0] for item in (args.set_values or [])}
+            touched_keys.update(args.unset_keys or [])
+            if any(key in touched_keys for key in LEGACY_SSO_KEYS):
+                _print_legacy_sso_notice(args.name)
+            elif _has_legacy_sso_values(profile_manager, args.name):
+                _print_legacy_sso_notice(args.name)
+            return
+        if cmd == "cleanup-legacy-sso":
+            path = profile_manager.modify_profile(
+                args.name,
+                updates={},
+                unset_keys=list(LEGACY_SSO_KEYS),
+            )
+            print(format_request_result("legacy SSO 清理", True, str(path)))
             return
         if cmd == "remove":
             profile_manager.remove_profile(args.name, force=bool(args.force))

@@ -1,18 +1,11 @@
 """热力图绘制组件：使用自定义绘制实现紧凑网格展示场地状态"""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Optional
 
-from PySide6.QtCore import (
-    QEvent,
-    QPoint,
-    QRect,
-    QSize,
-    Qt,
-    Signal,
-)
+from PySide6.QtCore import QPoint, QRect, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QMouseEvent, QPainter, QPen
 from PySide6.QtWidgets import QApplication, QWidget
 
@@ -32,10 +25,10 @@ class CellStatus(Enum):
 # 状态对应的符号
 STATUS_SYMBOLS = {
     CellStatus.AVAILABLE: "",      # 空闲不显示符号
-    CellStatus.LOCKED: "✖",        # 系统锁定
+    CellStatus.LOCKED: "🔒",        # 系统锁定
     CellStatus.PENDING: "⏳",      # 待付款
-    CellStatus.RESERVED: "✖",     # 已预定
-    CellStatus.UNKNOWN: "-",       # 未知
+    CellStatus.RESERVED: "❌",     # 已预定
+    CellStatus.UNKNOWN: "❓",       # 未知
 }
 
 # 默认状态颜色（可通过 QSS 覆盖）
@@ -45,9 +38,12 @@ DEFAULT_COLORS = {
     CellStatus.PENDING: "#FFF7E6",
     CellStatus.RESERVED: "#FEECEC",
     CellStatus.UNKNOWN: "#F5EEE8",
+    "range_blocked": "#FBE4E6",
+    "available_muted": "#E5E7EB",
+    "border_available": "#7CC9C8",
     "selected": "#0EA5A4",
-    "disabled": "#E5E7EB",
     "border": "#D1D5DB",
+    "border_range_blocked": "#E7A6AF",
     "border_hover": "#334155",
     "header_bg": "#F9FAFB",
     "header_text": "#6B7280",
@@ -59,6 +55,7 @@ class HeatCell:
     """热力图单元格数据模型"""
     status: CellStatus = CellStatus.AVAILABLE
     enabled: bool = True
+    range_blocked: bool = False
     selected: bool = False
     tooltip: str = ""
 
@@ -270,10 +267,12 @@ class HeatmapWidget(QWidget):
 
     def _get_cell_color(self, cell: HeatCell) -> QColor:
         """获取单元格背景色"""
-        if not cell.enabled:
-            return QColor(self._colors["disabled"])
         if cell.selected:
             return QColor(self._colors["selected"])
+        if cell.range_blocked:
+            return QColor(self._colors["range_blocked"])
+        if not cell.enabled and cell.status is CellStatus.AVAILABLE:
+            return QColor(self._colors["available_muted"])
 
         color_key = cell.status
         if isinstance(color_key, CellStatus):
@@ -354,6 +353,10 @@ class HeatmapWidget(QWidget):
 
         # 边框色
         border_color = QColor(self._colors["border"])
+        if cell.range_blocked:
+            border_color = QColor(self._colors["border_range_blocked"])
+        elif cell.enabled and cell.status is CellStatus.AVAILABLE:
+            border_color = QColor(self._colors["border_available"])
         if self._hovered == (row, col) and cell.enabled:
             border_color = QColor(self._colors["border_hover"])
 
@@ -453,7 +456,7 @@ if __name__ == "__main__":
             widget.set_cell(r, c, HeatCell(
                 status=status,
                 enabled=True,
-                tooltip=f"场地{r+1} {['8:00','9:00','10:00','11:00','12:00','13:00','14:00','15:00'][c]}"
+                tooltip=f"场地{r + 1} {['8:00', '9:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00'][c]}"
             ))
 
     widget.cellClicked.connect(lambda r, c: print(f"Clicked: ({r}, {c})"))

@@ -1,26 +1,18 @@
 """详情热力图面板：底部弹出，非模态，点击外部关闭，支持拖动"""
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import Optional
 
-from PySide6.QtCore import QEvent, QPoint, QRect, Qt
-from PySide6.QtGui import QMouseEvent
-from PySide6.QtWidgets import (
-    QApplication,
-    QFrame,
-    QHBoxLayout,
-    QLabel,
-    QVBoxLayout,
-    QWidget,
-)
+from PySide6.QtCore import Signal
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
-from src.ui.widgets.heatmap_widget import HeatmapWidget
-
-if TYPE_CHECKING:
-    pass
+from src.ui.state import BoardCell, BoardState, SelectionState
+from src.ui.ui_mappers import build_panel_selection_summary, resolve_enabled_choice_keys
+from src.ui.widgets.bottom_popup import BottomPopup
+from src.ui.widgets.heatmap_widget import CellStatus, HeatCell, HeatmapWidget
 
 
-class BoardPanel(QWidget):
+class BoardPanel(BottomPopup):
     """详情热力图面板 - 底部弹出，非模态，点击外部关闭，支持拖动
 
     布局结构:
@@ -31,27 +23,21 @@ class BoardPanel(QWidget):
     └─────────────────────────────────────────┘
     """
 
+    cellClicked = Signal(int, int)
+
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self.setProperty("boardPanel", "true")
-        self.setWindowFlags(
-            Qt.WindowType.Tool
-            | Qt.WindowType.FramelessWindowHint
-            | Qt.WindowType.NoDropShadowWindowHint
-        )
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)
-        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
 
         # 内部容器（用于圆角边框）
         self.body = QFrame(self)
         self.body.setProperty("boardPanelBody", "true")
 
         # 标题栏
-        self.title_label = QLabel("时段详情")
+        self.title_label = QLabel("🕐 时段详情")
         self.title_label.setProperty("role", "subtitle")
 
-        self.sync_label = QLabel("未同步")
+        self.sync_label = QLabel("⚠️ 未同步")
         self.sync_label.setProperty("role", "muted")
 
         title_layout = QHBoxLayout()
@@ -62,6 +48,7 @@ class BoardPanel(QWidget):
 
         # 热力图组件
         self.heatmap = HeatmapWidget()
+        self.heatmap.cellClicked.connect(self.cellClicked.emit)
 
         # 选择摘要
         self.selection_summary = QLabel("点击单元格选择时段")
@@ -81,136 +68,86 @@ class BoardPanel(QWidget):
         root_layout.setSpacing(0)
         root_layout.addWidget(self.body)
 
-        self._app_filter_installed = False
-        self._visible = False
-        
-        # 拖动支持
-        self._drag_pos: Optional[QPoint] = None
-
-    def set_sync_text(self, text: str) -> None:
+    def _set_sync_text(self, text: str) -> None:
         """设置同步时间文本"""
         self.sync_label.setText(text or "未同步")
 
-    def set_selection_summary(self, text: str) -> None:
+    def _set_selection_summary(self, text: str) -> None:
         """设置选择摘要文本"""
         self.selection_summary.setText(text or "点击单元格选择时段")
 
-    def show_at_bottom(self) -> None:
-        """在父窗口下方居中显示"""
-        parent = self.parent()
-        if parent is None:
+    def apply_board_state(
+        self,
+        state: BoardState | None,
+        selection_state: SelectionState | None = None,
+    ) -> None:
+        if state is None:
+            self._set_sync_text("")
+            self._set_selection_summary("点击单元格选择时段")
+            self.heatmap.set_dimensions(0, 0)
+            self.heatmap.set_headers([], [])
             return
 
-        self.adjustSize()
-        parent_rect = parent.frameGeometry()
+        sync_text = f"{state.last_sync_at or '-'}"
+        self._set_sync_text(sync_text)
 
-        # 计算目标宽度：至少与父窗口同宽（减去边距）
-        target_width = max(self.sizeHint().width(), parent_rect.width() - 16)
-        self.setFixedWidth(target_width)
+        rows = len(state.rows)
+        cols = len(state.time_headers) if state.time_headers else 0
+        self.heatmap.set_dimensions(rows, cols)
+        self.heatmap.set_headers(
+            row_headers=[row.space_name for row in state.rows],
+            col_headers=state.time_headers,
+        )
 
-        # 默认显示在父窗口下方，有8px间距
-        x = parent_rect.center().x() - self.width() // 2
-        y = parent_rect.bottom() + 8
+        selected_slots = self._selected_slots(selection_state)
+        enabled_slots = resolve_enabled_choice_keys(state, selection_state)
+        for row_index, row in enumerate(state.rows):
+            for col_index, cell in enumerate(row.cells):
+                key = (cell.space_id, cell.time_id)
+                self.heatmap.set_cell(
+                    row_index,
+                    col_index,
+                    HeatCell(
+                        status=self._map_cell_status(cell),
+                        enabled=key in enabled_slots,
+                        range_blocked=cell.range_blocked,
+                        selected=key in selected_slots,
+                        tooltip=self._build_tooltip(cell, enabled=key in enabled_slots),
+                    ),
+                )
 
-        # 屏幕空间不足时回退到父窗口上方
-        screen = parent.screen()
-        if screen is not None:
-            screen_rect = screen.availableGeometry()
-            if y + self.height() > screen_rect.bottom():
-                y = parent_rect.top() - self.height() - 8
-            if x + self.width() > screen_rect.right():
-                x = screen_rect.right() - self.width()
-            if x < screen_rect.left():
-                x = screen_rect.left()
+        self._set_selection_summary(build_panel_selection_summary(state, selection_state))
 
-        self.move(x, y)
-        self._install_app_event_filter()
-        self.show()
-        self._visible = True
+    def _map_cell_status(self, cell: BoardCell) -> CellStatus:
+        if cell.reservation_status == 1:
+            return CellStatus.AVAILABLE
+        if cell.reservation_status == 2:
+            return CellStatus.LOCKED
+        if cell.reservation_status == 3:
+            return CellStatus.PENDING
+        if cell.reservation_status == 4:
+            return CellStatus.RESERVED
+        return CellStatus.UNKNOWN
 
-    def _install_app_event_filter(self) -> None:
-        """安装应用级事件过滤器"""
-        if self._app_filter_installed:
-            return
-        app = QApplication.instance()
-        if app is not None:
-            app.installEventFilter(self)
-            self._app_filter_installed = True
+    def _build_tooltip(self, cell: BoardCell, *, enabled: bool) -> str:
+        tooltip = f"{cell.space_name} {cell.begin_time}-{cell.end_time}"
+        if cell.range_blocked:
+            return f"{tooltip}\n空闲，但不满足当前查询要求"
+        if cell.reservation_status == 1 and not enabled:
+            return f"{tooltip}\n空闲，但需先完成前序时段选择"
+        return tooltip
 
-    def _remove_app_event_filter(self) -> None:
-        """移除应用级事件过滤器"""
-        if not self._app_filter_installed:
-            return
-        app = QApplication.instance()
-        if app is not None:
-            app.removeEventFilter(self)
-        self._app_filter_installed = False
+    def _selected_slots(
+        self,
+        selection_state: SelectionState | None,
+    ) -> set[tuple[int, int]]:
+        if selection_state is None:
+            return set()
+        return {(choice.space_id, choice.time_id) for choice in selection_state.choices}
 
-    def eventFilter(self, obj, event) -> bool:
-        """事件过滤器：检测点击外部关闭"""
-        if not self._visible:
-            return super().eventFilter(obj, event)
-
-        if event.type() == QEvent.Type.MouseButtonPress:
-            # 获取全局坐标
-            if hasattr(event, "globalPosition"):
-                global_pos = event.globalPosition().toPoint()
-            elif hasattr(event, "globalPos"):
-                global_pos = event.globalPos()
-            else:
-                return super().eventFilter(obj, event)
-
-            # 使用全局坐标计算面板矩形
-            panel_rect = QRect(self.mapToGlobal(QPoint(0, 0)), self.size())
-
-            # 点击在面板外部 → 关闭面板
-            if not panel_rect.contains(global_pos):
-                self.hide()
-                self._visible = False
-                return False
-
-        return super().eventFilter(obj, event)
-
-    def mousePressEvent(self, event: QMouseEvent) -> None:
-        """鼠标按下：记录拖动起始位置"""
-        if event.button() == Qt.MouseButton.LeftButton:
-            # 只允许在标题栏区域拖动
-            title_rect = QRect(0, 0, self.width(), 40)
-            if title_rect.contains(event.position().toPoint()):
-                self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
-                event.accept()
-                return
-        super().mousePressEvent(event)
-
-    def mouseMoveEvent(self, event: QMouseEvent) -> None:
-        """鼠标移动：拖动窗口"""
-        if self._drag_pos is not None and event.buttons() & Qt.MouseButton.LeftButton:
-            self.move(event.globalPosition().toPoint() - self._drag_pos)
-            event.accept()
-            return
-        super().mouseMoveEvent(event)
-
-    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
-        """鼠标释放：结束拖动"""
-        if event.button() == Qt.MouseButton.LeftButton:
-            self._drag_pos = None
-            event.accept()
-            return
-        super().mouseReleaseEvent(event)
-
-    def closeEvent(self, event) -> None:
-        """关闭事件"""
-        self._visible = False
-        self._remove_app_event_filter()
-        super().closeEvent(event)
-
-    def hideEvent(self, event) -> None:
-        """隐藏事件"""
-        self._visible = False
-        self._remove_app_event_filter()
-        super().hideEvent(event)
-
-    def showEvent(self, event) -> None:
-        """显示事件"""
-        super().showEvent(event)
-        self.adjustSize()
+    def can_start_drag(self, local_pos) -> bool:
+        title_rect = self.title_label.geometry().united(self.sync_label.geometry())
+        title_rect.setLeft(0)
+        title_rect.setRight(self.width())
+        title_rect.setTop(0)
+        return title_rect.contains(local_pos)
