@@ -1,0 +1,106 @@
+/* CGYY Workbench - Modern Design System */
+
+/* === 设计变量（注释记录）===
+   主色:    #0EA5A4
+   成功:    #10B981
+   警告:    #F59E0B
+   错误:    #EF4444
+   背景:    #FAFAFA
+   卡片:    #FFFFFF
+   边框:    #E5E7EB
+   文字主:  #111827
+   文字次:  #6B7280
+   文字淡:  #9CA3AF
+
+   字体系统:
+   - 标题: 14px Semibold (600)
+   - 主要: 12px Medium (500)
+   - 辅助: 10px Regular (400)
+*/
+
+/* === 全局基础 === */
+* {
+    font-family: "PingFang HK", "Songti SC", "Times New Roman";
+    font-size: 12px;
+}
+
+QWidget {
+    background: #FAFAFA;
+    color: #111827;
+}
+
+QMainWindow {
+    background: #FAFAFA;
+}
+
+/* === 状态栏 === */
+QStatusBar {
+    background: transparent;
+    color: #6B7280;
+    border: none;
+    font-size: 10px;
+    padding: 0 8px;
+}
+
+/* === 文本角色 === */
+QLabel[role="title"] {
+    font-size: 14px;
+    font-weight: 600;
+    color: #111827;
+    letter-spacing: 0.3px;
+}
+
+QLabel[role="subtitle"] {
+    font-size: 11px;
+    color: #6B7280;
+}
+
+QLabel[role="muted"] {
+    color: #9CA3AF;
+    font-size: 10px;
+}
+
+QLabel[role="label"] {
+    font-size: 10px;
+    color: #6B7280;
+}
+
+/* === 工具提示 === */
+QToolTip {
+    background: #FFFFFF;
+    color: #111827;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 11px;
+}
+
+/* === 滚动条 === */
+QScrollBar:vertical,
+QScrollBar:horizontal {
+    background: transparent;
+    border: none;
+    width: 4px;
+    height: 4px;
+    margin: 0;
+}
+
+QScrollBar::handle:vertical,
+QScrollBar::handle:horizontal {
+    background: #D1D5DB;
+    border-radius: 2px;
+    min-height: 16px;
+    min-width: 16px;
+}
+
+QScrollBar::handle:hover {
+    background: #9CA3AF;
+}
+
+QScrollBar::add-line,
+QScrollBar::sub-line,
+QScrollBar::add-page,
+QScrollBar::sub-page {
+    background: none;
+    border: none;
+}

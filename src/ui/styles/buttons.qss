@@ -1,0 +1,127 @@
+/* CGYY Workbench - 按钮样式系统 */
+
+/* === 基础按钮 === */
+QPushButton {
+    min-height: 24px;
+    min-width: 24px;
+    padding: 0 10px;
+    border-radius: 4px;
+    border: 1px solid #E5E7EB;
+    background: #FFFFFF;
+    color: #374151;
+    font-size: 10px;
+    font-weight: 500;
+}
+
+QPushButton:hover {
+    border-color: #D1D5DB;
+    background: #F9FAFB;
+}
+
+QPushButton:pressed {
+    background: #F3F4F6;
+}
+
+QPushButton:disabled {
+    color: #9CA3AF;
+    background: #F9FAFB;
+    border-color: #E5E7EB;
+}
+
+/* === 主要按钮 (预约) === */
+QPushButton[variant="primary"] {
+    min-height: 26px;
+    background: #0EA5A4;
+    color: #FFFFFF;
+    border: none;
+    font-weight: 500;
+    font-size: 10px;
+}
+
+QPushButton[variant="primary"]:hover {
+    background: #0C9392;
+}
+
+QPushButton[variant="primary"]:pressed {
+    background: #0A8281;
+}
+
+QPushButton[variant="primary"]:disabled {
+    background: #A7F3D0;
+    color: #FFFFFF;
+}
+
+/* === 次要按钮 (详情、刷新) === */
+QPushButton[variant="secondary"] {
+    height: 24px;
+    background: #FFFFFF;
+    color: #374151;
+    border: 1px solid #E5E7EB;
+    font-size: 10px;
+}
+
+QPushButton[variant="secondary"]:hover {
+    border-color: #D1D5DB;
+    background: #F9FAFB;
+}
+
+/* === 警告按钮 (轮询) === */
+QPushButton[variant="warning"] {
+    height: 24px;
+    background: #FFFBEB;
+    color: #D97706;
+    border: 1px solid #FDE68A;
+    font-size: 10px;
+}
+
+QPushButton[variant="warning"]:hover {
+    background: #FEF3C7;
+    border-color: #FCD34D;
+}
+
+QPushButton[variant="warning"][active="true"] {
+    background: #EF4444;
+    color: #FFFFFF;
+    border-color: #EF4444;
+}
+
+QPushButton[variant="warning"][active="true"]:hover {
+    background: #DC2626;
+}
+
+/* === 工具栏按钮 (设置) === */
+QPushButton[variant="toolbar"] {
+    min-height: 24px;
+    min-width: 24px;
+    max-height: 24px;
+    max-width: 24px;
+    padding: 0;
+    border-radius: 4px;
+    border: 1px solid #E5E7EB;
+    background: transparent;
+    color: #6B7280;
+    font-size: 11px;
+}
+
+QPushButton[variant="toolbar"]:hover {
+    background: #F3F4F6;
+    color: #111827;
+}
+
+/* === 幽灵按钮 === */
+QPushButton[variant="ghost"] {
+    background: transparent;
+    color: #6B7280;
+    border: 1px solid transparent;
+    font-size: 10px;
+}
+
+QPushButton[variant="ghost"]:hover {
+    color: #111827;
+    background: #F3F4F6;
+}
+
+QPushButton[variant="ghost"]:checked {
+    background: #E5E7EB;
+    color: #111827;
+}

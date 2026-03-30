@@ -1,0 +1,292 @@
+/* CGYY Workbench - 输入控件样式 (紧凑 Fluent-like) */
+
+/* === 基础输入框 === */
+QLineEdit {
+    min-height: 28px;
+    max-height: 28px;
+    padding: 0 8px;
+    background: #FFFFFF;
+    border: 1px solid #E5E7EB;
+    border-radius: 6px;
+    selection-background-color: rgba(14, 165, 164, 0.2);
+    font-size: 12px;
+}
+
+QLineEdit:hover {
+    border-color: #D1D5DB;
+}
+
+QLineEdit:focus {
+    border: 1px solid #0EA5A4;
+    background: #FFFFFF;
+}
+
+QLineEdit:disabled {
+    background: #F3F4F6;
+    color: #9CA3AF;
+}
+
+QLineEdit::placeholder {
+    color: #9CA3AF;
+}
+
+/* === 下拉框 === */
+QComboBox {
+    min-height: 28px;
+    max-height: 28px;
+    padding: 0 8px;
+    padding-right: 24px;
+    background: #FFFFFF;
+    border: 1px solid #E5E7EB;
+    border-radius: 6px;
+    font-size: 12px;
+}
+
+QComboBox:hover {
+    border-color: #D1D5DB;
+}
+
+QComboBox:focus {
+    border: 1px solid #0EA5A4;
+}
+
+QComboBox:disabled {
+    background: #F3F4F6;
+    color: #9CA3AF;
+}
+
+QComboBox::drop-down {
+    border: none;
+    width: 20px;
+    padding-right: 4px;
+}
+
+QComboBox::down-arrow {
+    image: none;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid #6B7280;
+    margin-right: 4px;
+}
+
+QComboBox QAbstractItemView {
+    background: #FFFFFF;
+    border: 1px solid #E5E7EB;
+    border-radius: 6px;
+    padding: 4px;
+    selection-background-color: #F3F4F6;
+    selection-color: #111827;
+    outline: none;
+}
+
+/* === 数字输入 === */
+QSpinBox {
+    min-height: 28px;
+    max-height: 28px;
+    padding: 0 8px;
+    background: #FFFFFF;
+    border: 1px solid #E5E7EB;
+    border-radius: 6px;
+    font-size: 12px;
+}
+
+QSpinBox:hover {
+    border-color: #D1D5DB;
+}
+
+QSpinBox:focus {
+    border: 1px solid #0EA5A4;
+}
+
+QSpinBox:disabled {
+    background: #F3F4F6;
+    color: #9CA3AF;
+}
+
+QSpinBox::up-button,
+QSpinBox::down-button {
+    width: 16px;
+    border: none;
+    background: transparent;
+}
+
+QSpinBox::up-arrow {
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-bottom: 5px solid #6B7280;
+}
+
+QSpinBox::down-arrow {
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid #6B7280;
+}
+
+/* === 日期选择 === */
+QDateEdit {
+    min-height: 28px;
+    max-height: 28px;
+    padding: 0 8px;
+    padding-right: 24px;
+    background: #FFFFFF;
+    border: 1px solid #E5E7EB;
+    border-radius: 6px;
+    font-size: 12px;
+}
+
+QDateEdit:hover {
+    border-color: #D1D5DB;
+}
+
+QDateEdit:focus {
+    border: 1px solid #0EA5A4;
+}
+
+QDateEdit::drop-down {
+    border: none;
+    width: 20px;
+}
+
+QDateEdit::down-arrow {
+    image: none;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid #6B7280;
+}
+
+/* === 时间选择 === */
+QTimeEdit {
+    min-height: 28px;
+    max-height: 28px;
+    padding: 0 8px;
+    padding-right: 24px;
+    background: #FFFFFF;
+    border: 1px solid #E5E7EB;
+    border-radius: 6px;
+    font-size: 12px;
+}
+
+QTimeEdit:hover {
+    border-color: #D1D5DB;
+}
+
+QTimeEdit:focus {
+    border: 1px solid #0EA5A4;
+}
+
+QTimeEdit::drop-down {
+    border: none;
+    width: 20px;
+}
+
+QTimeEdit::down-arrow {
+    image: none;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid #6B7280;
+}
+
+/* === 日历弹窗 === */
+QCalendarWidget {
+    background: #FFFFFF;
+    border: 1px solid #E5E7EB;
+    border-radius: 8px;
+}
+
+QCalendarWidget QToolButton {
+    background: transparent;
+    color: #374151;
+    border: none;
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+QCalendarWidget QToolButton:hover {
+    background: #F3F4F6;
+}
+
+QCalendarWidget QMenu {
+    background: #FFFFFF;
+    border: 1px solid #E5E7EB;
+}
+
+QCalendarWidget QSpinBox {
+    min-height: 24px;
+}
+
+/* === 自定义下拉框 (CustomComboBox) === */
+CustomComboBox {
+    min-height: 24px;
+    background: transparent;
+    border: none;
+}
+
+CustomComboBox > QToolButton#comboButton {
+    min-height: 24px;
+    padding: 0 8px 0 8px;
+    border: 1px solid #E5E7EB;
+    border-radius: 4px;
+    background: #FFFFFF;
+    color: #374151;
+    font-size: 11px;
+    text-align: left;
+}
+
+CustomComboBox > QToolButton#comboButton:hover {
+    border-color: #D1D5DB;
+    background: #F9FAFB;
+}
+
+CustomComboBox > QToolButton#comboButton:pressed {
+    background: #F3F4F6;
+}
+
+/* === PopupList === */
+PopupList {
+    background: #FFFFFF;
+    border: 1px solid #E5E7EB;
+    border-radius: 6px;
+}
+
+PopupList QListWidget#popupListView {
+    background: #FFFFFF;
+    border: none;
+    border-radius: 6px;
+    outline: none;
+    font-size: 11px;
+}
+
+PopupList QListWidget#popupListView::item {
+    padding: 6px 10px;
+    color: #374151;
+    background: transparent;
+}
+
+PopupList QListWidget#popupListView::item:hover {
+    background: #F3F4F6;
+}
+
+PopupList QListWidget#popupListView::item:selected {
+    background: #F0FDFA;
+    color: #0EA5A4;
+}
+
+PopupList QListWidget#popupListView QScrollBar:vertical {
+    width: 6px;
+    margin: 4px 2px 4px 0;
+    background: transparent;
+}
+
+PopupList QListWidget#popupListView QScrollBar::handle:vertical {
+    background: #D1D5DB;
+    border-radius: 3px;
+    min-height: 16px;
+}
+
+PopupList QListWidget#popupListView QScrollBar::add-line,
+PopupList QListWidget#popupListView QScrollBar::sub-line,
+PopupList QListWidget#popupListView QScrollBar::add-page,
+PopupList QListWidget#popupListView QScrollBar::sub-page {
+    background: none;
+    height: 0px;
+}
