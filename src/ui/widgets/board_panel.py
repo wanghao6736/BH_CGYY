@@ -1,43 +1,39 @@
-"""轮询弹窗：底部弹出，非模态，点击外部关闭，支持拖动"""
+"""详情热力图面板：底部弹出，非模态，点击外部关闭，支持拖动"""
 from __future__ import annotations
 
-from datetime import datetime, timedelta
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from PySide6.QtCore import QEvent, QPoint, QRect, Qt
 from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import (
-    QApplication, QFrame, QHBoxLayout, QLabel, QPushButton, QWidget
+    QApplication,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QVBoxLayout,
+    QWidget,
 )
 
-from src.ui.widgets.custom_combo import CustomComboBox
+from src.ui.widgets.heatmap_widget import HeatmapWidget
+
+if TYPE_CHECKING:
+    pass
 
 
-POLL_INTERVALS = [
-    ("10秒", 10),
-    ("30秒", 30),
-    ("1分钟", 60),
-    ("5分钟", 300),
-    ("10分钟", 600),
-    ("30分钟", 1800),
-    ("1小时", 3600),
-]
+class BoardPanel(QWidget):
+    """详情热力图面板 - 底部弹出，非模态，点击外部关闭，支持拖动
 
+    布局结构:
+    ┌─────────────────────────────────────────┐
+    │ 时段详情              最后同步: 10:30   │
+    ├─────────────────────────────────────────┤
+    │ [HeatmapWidget - 热力图网格]            │
+    └─────────────────────────────────────────┘
+    """
 
-def round_up_to_5_minutes(dt: datetime) -> datetime:
-    """向上取整到5分钟"""
-    remainder = dt.minute % 5
-    delta = 0 if remainder == 0 else 5 - remainder
-    rounded = dt + timedelta(minutes=delta)
-    return rounded.replace(second=0, microsecond=0)
-
-
-class PollDialog(QWidget):
-    """轮询参数弹窗 - 底部弹出，非模态，点击外部关闭，支持拖动"""
-
-    def __init__(self, parent=None) -> None:
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
-        self.setProperty("pollDialog", "true")
+        self.setProperty("boardPanel", "true")
         self.setWindowFlags(
             Qt.WindowType.Tool
             | Qt.WindowType.FramelessWindowHint
@@ -47,43 +43,43 @@ class PollDialog(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
 
+        # 内部容器（用于圆角边框）
         self.body = QFrame(self)
-        self.body.setProperty("pollDialogBody", "true")
+        self.body.setProperty("boardPanelBody", "true")
 
-        # 开始时间
-        self.start_label = QLabel("⏰ 开始")
-        self.start_time_combo = CustomComboBox()
-        self.start_time_combo.setFixedWidth(90)
-        self._init_start_times()
+        # 标题栏
+        self.title_label = QLabel("时段详情")
+        self.title_label.setProperty("role", "subtitle")
 
-        # 间隔
-        self.interval_label = QLabel("↻ 间隔")
-        self.interval_combo = CustomComboBox()
-        self.interval_combo.setFixedWidth(90)
-        self.interval_combo.addItems([item[0] for item in POLL_INTERVALS])
+        self.sync_label = QLabel("未同步")
+        self.sync_label.setProperty("role", "muted")
 
-        # 开始按钮
-        self.start_button = QPushButton("▶ 开始")
-        self.start_button.setObjectName("startButton")
-        self.start_button.setFixedHeight(24)
+        title_layout = QHBoxLayout()
+        title_layout.setContentsMargins(0, 0, 0, 0)
+        title_layout.addWidget(self.title_label)
+        title_layout.addStretch(1)
+        title_layout.addWidget(self.sync_label)
 
-        # 布局：外层透明容器 + 内层圆角面板（QSS 控制）
-        root_layout = QHBoxLayout(self)
+        # 热力图组件
+        self.heatmap = HeatmapWidget()
+
+        # 选择摘要
+        self.selection_summary = QLabel("点击单元格选择时段")
+        self.selection_summary.setProperty("summary", "true")
+
+        # 内容布局
+        content_layout = QVBoxLayout(self.body)
+        content_layout.setContentsMargins(12, 10, 12, 10)
+        content_layout.setSpacing(8)
+        content_layout.addLayout(title_layout)
+        content_layout.addWidget(self.heatmap)
+        content_layout.addWidget(self.selection_summary)
+
+        # 外层布局
+        root_layout = QVBoxLayout(self)
         root_layout.setContentsMargins(0, 0, 0, 0)
         root_layout.setSpacing(0)
         root_layout.addWidget(self.body)
-
-        content_layout = QHBoxLayout(self.body)
-        content_layout.setContentsMargins(16, 10, 16, 10)
-        content_layout.setSpacing(10)
-        content_layout.addWidget(self.start_label)
-        content_layout.addWidget(self.start_time_combo)
-        content_layout.addWidget(self.interval_label)
-        content_layout.addWidget(self.interval_combo)
-        content_layout.addSpacing(8)
-        content_layout.addWidget(self.start_button)
-
-        self.adjustSize()
 
         self._app_filter_installed = False
         self._visible = False
@@ -91,36 +87,24 @@ class PollDialog(QWidget):
         # 拖动支持
         self._drag_pos: Optional[QPoint] = None
 
-    def _init_start_times(self) -> None:
-        """初始化开始时间选项"""
-        now = datetime.now()
-        rounded = round_up_to_5_minutes(now)
-        times = []
-        for i in range(24):
-            t = rounded + timedelta(minutes=i * 5)
-            times.append(t.strftime("%H:%M"))
-        self.start_time_combo.addItems(times)
+    def set_sync_text(self, text: str) -> None:
+        """设置同步时间文本"""
+        self.sync_label.setText(text or "未同步")
 
-    def get_start_time(self) -> str:
-        return self.start_time_combo.currentText()
-
-    def get_interval_seconds(self) -> int:
-        idx = self.interval_combo.currentIndex()
-        if 0 <= idx < len(POLL_INTERVALS):
-            return POLL_INTERVALS[idx][1]
-        return 30
+    def set_selection_summary(self, text: str) -> None:
+        """设置选择摘要文本"""
+        self.selection_summary.setText(text or "点击单元格选择时段")
 
     def show_at_bottom(self) -> None:
         """在父窗口下方居中显示"""
-        self.start_time_combo.clear()
-        self._init_start_times()
-
         parent = self.parent()
         if parent is None:
             return
 
         self.adjustSize()
         parent_rect = parent.frameGeometry()
+
+        # 计算目标宽度：至少与父窗口同宽（减去边距）
         target_width = max(self.sizeHint().width(), parent_rect.width() - 16)
         self.setFixedWidth(target_width)
 
@@ -145,6 +129,7 @@ class PollDialog(QWidget):
         self._visible = True
 
     def _install_app_event_filter(self) -> None:
+        """安装应用级事件过滤器"""
         if self._app_filter_installed:
             return
         app = QApplication.instance()
@@ -153,6 +138,7 @@ class PollDialog(QWidget):
             self._app_filter_installed = True
 
     def _remove_app_event_filter(self) -> None:
+        """移除应用级事件过滤器"""
         if not self._app_filter_installed:
             return
         app = QApplication.instance()
@@ -174,17 +160,11 @@ class PollDialog(QWidget):
             else:
                 return super().eventFilter(obj, event)
 
-            # 使用全局坐标计算 dialog 矩形
-            dialog_rect = QRect(self.mapToGlobal(QPoint(0, 0)), self.size())
+            # 使用全局坐标计算面板矩形
+            panel_rect = QRect(self.mapToGlobal(QPoint(0, 0)), self.size())
 
-            # 检查是否有子 popup 打开
-            has_active_popup = (
-                self.start_time_combo.isPopupVisible()
-                or self.interval_combo.isPopupVisible()
-            )
-
-            # 点击在 dialog 外，且没有子 popup 打开 → 关闭 dialog
-            if not dialog_rect.contains(global_pos) and not has_active_popup:
+            # 点击在面板外部 → 关闭面板
+            if not panel_rect.contains(global_pos):
                 self.hide()
                 self._visible = False
                 return False
@@ -194,9 +174,12 @@ class PollDialog(QWidget):
     def mousePressEvent(self, event: QMouseEvent) -> None:
         """鼠标按下：记录拖动起始位置"""
         if event.button() == Qt.MouseButton.LeftButton:
-            self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
-            event.accept()
-            return
+            # 只允许在标题栏区域拖动
+            title_rect = QRect(0, 0, self.width(), 40)
+            if title_rect.contains(event.position().toPoint()):
+                self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+                event.accept()
+                return
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
@@ -219,13 +202,15 @@ class PollDialog(QWidget):
         """关闭事件"""
         self._visible = False
         self._remove_app_event_filter()
-        self.start_time_combo.hidePopup()
-        self.interval_combo.hidePopup()
         super().closeEvent(event)
 
     def hideEvent(self, event) -> None:
+        """隐藏事件"""
         self._visible = False
         self._remove_app_event_filter()
-        self.start_time_combo.hidePopup()
-        self.interval_combo.hidePopup()
         super().hideEvent(event)
+
+    def showEvent(self, event) -> None:
+        """显示事件"""
+        super().showEvent(event)
+        self.adjustSize()
