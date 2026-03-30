@@ -138,6 +138,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="移除指定 KEY，可重复",
     )
 
+    cleanup_parser = profile_sub.add_parser("cleanup-legacy-sso", help="清理 profile 中遗留的 SSO 账号密码字段")
+    cleanup_parser.add_argument("name", help="profile 名称")
+
     remove_parser = profile_sub.add_parser("remove", help="删除 profile")
     remove_parser.add_argument("name", help="profile 名称")
     remove_parser.add_argument(

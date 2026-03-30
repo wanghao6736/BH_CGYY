@@ -4,8 +4,9 @@ from __future__ import annotations
 import weakref
 from typing import Any
 
-from PySide6.QtCore import QEvent, QPoint, QRect, Signal, Qt
-from PySide6.QtWidgets import QApplication, QFrame, QHBoxLayout, QToolButton
+from PySide6.QtCore import QEvent, QPoint, QRect, Qt, Signal
+from PySide6.QtWidgets import (QApplication, QFrame, QHBoxLayout, QSizePolicy,
+                               QToolButton)
 
 from src.ui.widgets.popup_list import PopupList
 
@@ -19,19 +20,33 @@ class CustomComboBox(QFrame):
     # 使用 weakref 避免内存泄漏
     _active_combo_ref: weakref.ref | None = None
 
-    def __init__(self, parent=None, max_visible_items: int = 8) -> None:
+    def __init__(
+        self,
+        parent=None,
+        max_visible_items: int = 8,
+        *,
+        multi_select: bool = False,
+    ) -> None:
         super().__init__(parent)
         self._items: list[str] = []
         self._item_data: dict[int, Any] = {}
         self._current_index = 0
+        self._checked_indices: set[int] = set()
         self._max_visible_items = max_visible_items
         self._min_display_text_px = 0
         self._app_filter_installed = False
+        self._multi_select = multi_select
+        self._placeholder_text = ""
 
         # 使用 QToolButton 作为触发器
         self._button = QToolButton()
         self._button.setObjectName("comboButton")
         self._button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+        self._button.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Fixed,
+        )
+        self._button.setMinimumWidth(0)
         self._button.clicked.connect(self._toggle_popup)
 
         # 无状态弹层列表
@@ -55,10 +70,23 @@ class CustomComboBox(QFrame):
         self._items = list(items)
         self._item_data.clear()
         self._current_index = 0
+        self._checked_indices.clear()
         if items:
             self._update_display()
         else:
-            self._button.setText("")
+            self._update_display()
+        self._sync_popup_selection()
+
+    def setItemsWithData(self, items: list[tuple[str, Any]]) -> None:
+        """批量设置带关联数据的列表项。"""
+        self._items = []
+        self._item_data.clear()
+        self._current_index = 0
+        self._checked_indices.clear()
+        for index, (text, data) in enumerate(items):
+            self._items.append(text)
+            self._item_data[index] = data
+        self._update_display()
         self._sync_popup_selection()
 
     def addItem(self, text: str, data: Any = None) -> None:
@@ -80,7 +108,8 @@ class CustomComboBox(QFrame):
         self._items.clear()
         self._item_data.clear()
         self._current_index = 0
-        self._button.setText("")
+        self._checked_indices.clear()
+        self._update_display()
         self._hide_popup()
 
     def setCurrentIndex(self, index: int) -> None:
@@ -99,13 +128,53 @@ class CustomComboBox(QFrame):
 
     def currentText(self) -> str:
         """返回当前文本"""
+        if self._multi_select:
+            texts = self.checkedTexts()
+            return ", ".join(texts) if texts else self._placeholder_text
         if 0 <= self._current_index < len(self._items):
             return self._items[self._current_index]
         return ""
 
     def currentData(self) -> Any:
         """获取当前项关联的数据"""
+        if self._multi_select:
+            return self.checkedData()
         return self._item_data.get(self._current_index)
+
+    def count(self) -> int:
+        """返回当前项数量。"""
+        return len(self._items)
+
+    def itemText(self, index: int) -> str:
+        """返回指定索引的文本。"""
+        if 0 <= index < len(self._items):
+            return self._items[index]
+        return ""
+
+    def checkedTexts(self) -> list[str]:
+        return [self._items[index] for index in sorted(self._checked_indices) if 0 <= index < len(self._items)]
+
+    def checkedData(self) -> list[Any]:
+        result: list[Any] = []
+        for index in sorted(self._checked_indices):
+            if not (0 <= index < len(self._items)):
+                continue
+            result.append(self._item_data.get(index, self._items[index]))
+        return result
+
+    def setCheckedData(self, values: list[Any]) -> None:
+        targets = {str(value) for value in values if str(value).strip()}
+        self._checked_indices = {
+            index
+            for index in range(len(self._items))
+            if str(self._item_data.get(index, self._items[index])) in targets
+        }
+        self._update_display()
+        self._sync_popup_selection()
+
+    def setPlaceholderText(self, text: str) -> None:
+        self._placeholder_text = text
+        self._update_display()
 
     def maxItemTextWidth(self) -> int:
         """返回当前列表项最大文本像素宽度。"""
@@ -148,12 +217,30 @@ class CustomComboBox(QFrame):
 
     def _update_display(self) -> None:
         """更新显示文本"""
-        if self._items and 0 <= self._current_index < len(self._items):
+        if self._multi_select:
+            checked_texts = self.checkedTexts()
+            if not checked_texts:
+                text = self._placeholder_text
+                tooltip_text = ""
+            else:
+                text = ", ".join(checked_texts)
+                tooltip_text = text
+        elif self._items and 0 <= self._current_index < len(self._items):
             text = self._items[self._current_index]
+            tooltip_text = text
+        else:
+            text = ""
+            tooltip_text = ""
+
+        if text:
             metrics = self._button.fontMetrics()
-            contents = self._button.contentsRect()
-            available = max(12, contents.width())
-            suffix_text = "  ▼"
+            available = max(
+                12,
+                self._button.contentsRect().width(),
+                self._button.width(),
+                self.width(),
+            )
+            suffix_text = " ⌵"
             suffix_width = metrics.horizontalAdvance(suffix_text)
             body_available = max(8, available - suffix_width)
             elided = metrics.elidedText(text, Qt.TextElideMode.ElideRight, body_available)
@@ -173,7 +260,7 @@ class CustomComboBox(QFrame):
                 full_text = f"{padded_body}{suffix_text}"
 
             self._button.setText(full_text)
-            self._button.setToolTip(text)
+            self._button.setToolTip(tooltip_text or text)
         else:
             self._button.setText("")
             self._button.setToolTip("")
@@ -181,7 +268,10 @@ class CustomComboBox(QFrame):
     def _sync_popup_selection(self) -> None:
         """同步弹层选中状态"""
         if self._popup.isVisible():
-            self._popup.set_selected(self._current_index)
+            if self._multi_select:
+                self._popup.set_checked(self._checked_indices)
+            else:
+                self._popup.set_selected(self._current_index)
 
     def _toggle_popup(self) -> None:
         """切换弹层显示状态"""
@@ -201,7 +291,12 @@ class CustomComboBox(QFrame):
             active.hidePopup()
 
         # 设置弹层内容
-        self._popup.set_items(self._items, self._current_index)
+        self._popup.set_items(
+            self._items,
+            self._current_index,
+            checked_indices=self._checked_indices,
+            multi_select=self._multi_select,
+        )
         self._popup.setFixedWidth(self.width())
 
         # 计算弹层高度
@@ -249,8 +344,21 @@ class CustomComboBox(QFrame):
 
     def _on_popup_item_clicked(self, index: int) -> None:
         """弹层项被点击"""
+        if not (0 <= index < len(self._items)):
+            return
+
+        if self._multi_select:
+            if index in self._checked_indices:
+                self._checked_indices.remove(index)
+            else:
+                self._checked_indices.add(index)
+            self._update_display()
+            self.currentTextChanged.emit(self.currentText())
+            self._sync_popup_selection()
+            return
+
         self._hide_popup()
-        if 0 <= index < len(self._items) and index != self._current_index:
+        if index != self._current_index:
             self._current_index = index
             self._update_display()
             self.currentIndexChanged.emit(index)
@@ -258,6 +366,8 @@ class CustomComboBox(QFrame):
 
     def _hide_popup(self) -> None:
         """隐藏弹层"""
+        if not hasattr(self, "_popup"):
+            return
         if self._popup.isVisible():
             self._popup.hide()
         if CustomComboBox._get_active_combo() is self:
@@ -340,6 +450,10 @@ class CustomComboBox(QFrame):
     def closeEvent(self, event) -> None:
         self._hide_popup()
         super().closeEvent(event)
+
+    def showEvent(self, event) -> None:
+        self._update_display()
+        super().showEvent(event)
 
     def resizeEvent(self, event) -> None:
         self._update_display()

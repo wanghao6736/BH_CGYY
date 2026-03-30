@@ -23,6 +23,7 @@ class PopupList(QFrame):
         self.setObjectName("popupList")
 
         self._list_widget = QListWidget()
+        self._multi_select = False
         self._list_widget.setObjectName("popupListView")
         self._list_widget.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._list_widget.itemClicked.connect(self._on_item_clicked)
@@ -37,20 +38,48 @@ class PopupList(QFrame):
         """暴露 list_widget 用于高度计算（向后兼容）"""
         return self._list_widget
 
-    def set_items(self, items: list[str], selected_index: int = -1) -> None:
+    def set_items(
+        self,
+        items: list[str],
+        selected_index: int = -1,
+        *,
+        checked_indices: set[int] | None = None,
+        multi_select: bool = False,
+    ) -> None:
         """设置列表项（纯渲染，不存储状态）"""
+        self._multi_select = multi_select
+        checked = checked_indices or set()
         self._list_widget.clear()
         for i, text in enumerate(items):
-            item = QListWidgetItem(text)
+            item = QListWidgetItem()
+            item.setData(Qt.ItemDataRole.UserRole, text)
+            if self._multi_select:
+                self._set_checked_state(item, i in checked)
+            else:
+                item.setText(text)
+                if i == selected_index:
+                    item.setSelected(True)
             self._list_widget.addItem(item)
-            if i == selected_index:
-                item.setSelected(True)
-        if 0 <= selected_index < len(items):
+        if not self._multi_select and 0 <= selected_index < len(items):
             self._list_widget.setCurrentRow(selected_index)
 
     def set_selected(self, index: int) -> None:
         """设置选中项"""
-        self._list_widget.setCurrentRow(index)
+        if not self._multi_select:
+            self._list_widget.setCurrentRow(index)
+
+    def set_checked(self, indices: set[int]) -> None:
+        """设置多选勾选状态。"""
+        if not self._multi_select:
+            return
+        for row in range(self._list_widget.count()):
+            item = self._list_widget.item(row)
+            self._set_checked_state(item, row in indices)
+
+    def _set_checked_state(self, item: QListWidgetItem, checked: bool) -> None:
+        text = str(item.data(Qt.ItemDataRole.UserRole) or "")
+        item.setData(Qt.ItemDataRole.UserRole + 1, checked)
+        item.setText(f"✓ {text}" if checked else text)
 
     def _on_item_clicked(self, item: QListWidgetItem) -> None:
         """点击项时，通知父组件"""

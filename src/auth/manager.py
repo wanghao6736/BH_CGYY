@@ -72,14 +72,53 @@ class AuthManager:
         if not self.sso_settings.persist_to_env:
             logger.info("已跳过鉴权持久化（CGYY_AUTH_PERSIST_TO_ENV=0）")
             return
-        self.env_store.set_values(
-            {
-                "CGYY_COOKIE": state.cookie,
-                "CGYY_CG_AUTH": state.cg_authorization,
-            },
-            persist=True,
-            update_environ=True,
+        try:
+            self.env_store.set_values(
+                {
+                    "CGYY_COOKIE": state.cookie,
+                    "CGYY_CG_AUTH": state.cg_authorization,
+                },
+                persist=True,
+                update_environ=True,
+            )
+        except ValueError as exc:
+            logger.warning("跳过鉴权持久化：%s", exc)
+
+    def _login_via_sso(
+        self,
+        credentials: Credentials,
+        *,
+        flow_id: str,
+        source: str,
+    ) -> AuthBootstrapResult:
+        current_state = ServiceAuthState(
+            service_name="cgyy",
+            cookie=self.auth_settings.cookie,
+            cg_authorization=self.auth_settings.cg_authorization,
+            obtained_at=time.time(),
+            source=source,
         )
+        if not self.sso_settings.login_base_url or not self.sso_settings.service_url:
+            raise AuthUnavailableError("SSO 已启用，但未配置登录地址或服务地址")
+
+        logger.info("开始执行 SSO 自动登录 flow_id=%s source=%s", flow_id, source)
+        state = self.sso_bootstrap_service.login(credentials, current_state.to_auth_context())
+        if not state.cookie:
+            raise AuthUnavailableError("SSO 登录完成，但未获取到服务 cookie")
+        state.cg_authorization = self._exchange_cg_authorization(state)
+        if not state.cg_authorization:
+            raise AuthUnavailableError("SSO 登录完成，但未换取到 cgAuthorization")
+        self._apply_state(state)
+        state.obtained_at = time.time()
+        self._persist_auth(state)
+        logger.info(
+            "认证流程完成 flow_id=%s source=%s cookie_keys=%s cg_auth=%s",
+            flow_id,
+            source,
+            ",".join(sorted(state.to_auth_context().cookies.keys())),
+            self._fingerprint(state.cg_authorization),
+        )
+        return AuthBootstrapResult(reused=False, refreshed=True, state=state)
 
     def ensure_cgyy_auth(self) -> AuthBootstrapResult:
         flow_id = uuid.uuid4().hex[:8]
@@ -101,34 +140,26 @@ class AuthManager:
 
         if not self.sso_settings.enabled:
             raise AuthUnavailableError("当前认证失效，且未启用 SSO 自动登录")
-        if not self.sso_settings.login_base_url or not self.sso_settings.service_url:
-            raise AuthUnavailableError("SSO 已启用，但未配置登录地址或服务地址")
         if not self.sso_settings.username or not self.sso_settings.password:
             raise AuthUnavailableError("SSO 已启用，但未配置账号密码")
-
-        logger.info("开始执行 SSO 自动登录 flow_id=%s", flow_id)
-        state = self.sso_bootstrap_service.login(
+        return self._login_via_sso(
             Credentials(
                 username=self.sso_settings.username,
                 password=self.sso_settings.password,
             ),
-            current_state.to_auth_context(),
+            flow_id=flow_id,
+            source="env",
         )
-        if not state.cookie:
-            raise AuthUnavailableError("SSO 登录完成，但未获取到服务 cookie")
-        state.cg_authorization = self._exchange_cg_authorization(state)
-        if not state.cg_authorization:
-            raise AuthUnavailableError("SSO 登录完成，但未换取到 cgAuthorization")
-        self._apply_state(state)
-        state.obtained_at = time.time()
-        self._persist_auth(state)
-        logger.info(
-            "认证流程完成 flow_id=%s source=sso cookie_keys=%s cg_auth=%s",
-            flow_id,
-            ",".join(sorted(state.to_auth_context().cookies.keys())),
-            self._fingerprint(state.cg_authorization),
+
+    def login_with_credentials(self, username: str, password: str) -> AuthBootstrapResult:
+        if not username or not password:
+            raise AuthUnavailableError("请输入账号密码")
+        flow_id = uuid.uuid4().hex[:8]
+        return self._login_via_sso(
+            Credentials(username=username, password=password),
+            flow_id=flow_id,
+            source="ui",
         )
-        return AuthBootstrapResult(reused=False, refreshed=True, state=state)
 
     def get_cgyy_auth_status(self) -> AuthBootstrapResult:
         current_state = ServiceAuthState(

@@ -3,17 +3,16 @@ from __future__ import annotations
 from PySide6.QtCore import QObject, Signal
 
 from src.ui.facade import BoardQuery, ReserveRequest, UiFacade
-from src.ui.state import (PollingState, PollingStatus, ReserveOutcome,
-                          SessionState, SettingsFormState)
+from src.ui.state import SettingsFormState
 from src.ui.tasks import UiTaskRunner, UiTaskSpec
 
 
 class UiController(QObject):
     session_loaded = Signal(int, object)
+    catalog_loaded = Signal(int, object)
     board_loaded = Signal(int, object)
     reserve_finished = Signal(int, object)
     settings_loaded = Signal(int, object)
-    polling_state_changed = Signal(object)
     lane_busy_changed = Signal(str, bool)
     lane_failed = Signal(str, int, str)
 
@@ -23,12 +22,11 @@ class UiController(QObject):
         self._runner = runner or UiTaskRunner()
         self._generations = {
             "session": 0,
+            "catalog": 0,
             "board": 0,
             "reserve": 0,
             "settings": 0,
-            "polling": 0,
         }
-        self.polling_state = PollingState()
         self._runner.result_ready.connect(self._handle_result)
         self._runner.error_ready.connect(self._handle_error)
         self._runner.busy_changed.connect(self.lane_busy_changed.emit)
@@ -49,17 +47,41 @@ class UiController(QObject):
         )
         return generation
 
-    def request_login(self, profile_name: str, username: str, password: str) -> int | None:
+    def request_login(
+        self,
+        profile_name: str,
+        username: str,
+        password: str,
+        *,
+        persist_auth: bool = True,
+    ) -> int | None:
         generation = self._next_generation("session")
         started = self._runner.submit(
             UiTaskSpec(
                 lane="session",
                 generation=generation,
                 single_flight=True,
-                fn=lambda: self._facade.login(profile_name, username, password),
+                fn=lambda: self._facade.login(
+                    profile_name,
+                    username,
+                    password,
+                    persist_auth=persist_auth,
+                ),
             )
         )
         return generation if started else None
+
+    def request_catalog_load(self, profile_name: str, *, skip_auth_probe: bool = False) -> int:
+        generation = self._next_generation("catalog")
+        self._runner.submit(
+            UiTaskSpec(
+                lane="catalog",
+                generation=generation,
+                single_flight=False,
+                fn=lambda: self._facade.load_catalog(profile_name, skip_auth_probe=skip_auth_probe),
+            )
+        )
+        return generation
 
     def request_logout(self, profile_name: str) -> int | None:
         generation = self._next_generation("session")
@@ -109,62 +131,11 @@ class UiController(QObject):
         )
         return generation if started else None
 
-    def request_start_polling(self, query: BoardQuery, *, interval_sec: int = 8) -> int | None:
-        if self.polling_state.status in {PollingStatus.STARTING, PollingStatus.RUNNING}:
-            return None
-        generation = self._next_generation("polling")
-        self.polling_state = PollingState(
-            status=PollingStatus.STARTING,
-            interval_sec=max(1, interval_sec),
-            last_checked_at=self.polling_state.last_checked_at,
-            last_message="轮询启动中",
-        )
-        self.polling_state_changed.emit(self.polling_state)
-        return generation
-
-    def request_stop_polling(self) -> int | None:
-        if self.polling_state.status in {PollingStatus.STOPPING, PollingStatus.STOPPED}:
-            return None
-        generation = self._next_generation("polling")
-        self.polling_state = PollingState(
-            status=PollingStatus.STOPPING,
-            interval_sec=self.polling_state.interval_sec,
-            last_checked_at=self.polling_state.last_checked_at,
-            last_message="轮询停止中",
-        )
-        self.polling_state_changed.emit(self.polling_state)
-        return generation
-
-    def set_polling_running(self) -> None:
-        self.polling_state = PollingState(
-            status=PollingStatus.RUNNING,
-            interval_sec=self.polling_state.interval_sec,
-            last_checked_at=self.polling_state.last_checked_at,
-            last_message=self.polling_state.last_message or "轮询运行中",
-        )
-        self.polling_state_changed.emit(self.polling_state)
-
-    def set_polling_stopped(self, message: str = "已停止") -> None:
-        self.polling_state = PollingState(
-            status=PollingStatus.STOPPED,
-            interval_sec=self.polling_state.interval_sec,
-            last_checked_at=self.polling_state.last_checked_at,
-            last_message=message,
-        )
-        self.polling_state_changed.emit(self.polling_state)
-
-    def update_polling_check(self, *, checked_at: str, message: str) -> None:
-        self.polling_state = PollingState(
-            status=PollingStatus.RUNNING,
-            interval_sec=self.polling_state.interval_sec,
-            last_checked_at=checked_at,
-            last_message=message,
-        )
-        self.polling_state_changed.emit(self.polling_state)
-
     def _handle_result(self, lane: str, generation: int, payload: object) -> None:
         if lane == "session":
             self.session_loaded.emit(generation, payload)
+        elif lane == "catalog":
+            self.catalog_loaded.emit(generation, payload)
         elif lane == "board":
             self.board_loaded.emit(generation, payload)
         elif lane == "reserve":

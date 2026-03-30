@@ -23,3 +23,13 @@ def test_parser_accepts_profile_subcommand_set_and_unset() -> None:
     assert args.name == "alice"
     assert args.set_values == ["CGYY_PHONE=13800138000"]
     assert args.unset_keys == ["CGYY_BUDDY_IDS"]
+
+
+def test_parser_accepts_profile_cleanup_legacy_sso() -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(["profile", "cleanup-legacy-sso", "alice"])
+
+    assert args.cmd == "profile"
+    assert args.profile_cmd == "cleanup-legacy-sso"
+    assert args.name == "alice"

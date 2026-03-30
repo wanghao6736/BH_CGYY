@@ -47,3 +47,45 @@ def test_run_profile_modify_updates_file(tmp_path: Path, capsys) -> None:
     assert "CGYY_DISPLAY_NAME=Alice" in content
     assert "CGYY_BUDDY_IDS" not in content
     assert "成功" in out
+
+
+def test_run_profile_show_warns_about_legacy_sso_fields(tmp_path: Path, capsys) -> None:
+    default_env = tmp_path / ".env"
+    profile_env = tmp_path / ".env.profiles" / "alice.env"
+    profile_env.parent.mkdir(parents=True)
+    default_env.write_text("", encoding="utf-8")
+    profile_env.write_text("CGYY_SSO_USERNAME=alice\nCGYY_SSO_PASSWORD=secret\n", encoding="utf-8")
+    manager = ProfileManager(root=tmp_path, environ={})
+
+    run_profile(
+        manager,
+        Namespace(profile_cmd="show", name="alice", set_values=[], unset_keys=[], force=False),
+    )
+
+    out = capsys.readouterr().out
+    assert "CGYY_SSO_USERNAME" in out
+    assert "仅供 CLI 自动化模式使用" in out
+    assert "cleanup-legacy-sso alice" in out
+
+
+def test_run_profile_cleanup_legacy_sso_unsets_username_and_password(tmp_path: Path, capsys) -> None:
+    default_env = tmp_path / ".env"
+    profile_env = tmp_path / ".env.profiles" / "alice.env"
+    profile_env.parent.mkdir(parents=True)
+    default_env.write_text("", encoding="utf-8")
+    profile_env.write_text(
+        "CGYY_SSO_USERNAME=alice\nCGYY_SSO_PASSWORD=secret\nCGYY_PHONE=13800138000\n",
+        encoding="utf-8")
+    manager = ProfileManager(root=tmp_path, environ={})
+
+    run_profile(
+        manager,
+        Namespace(profile_cmd="cleanup-legacy-sso", name="alice", set_values=[], unset_keys=[], force=False),
+    )
+
+    out = capsys.readouterr().out
+    content = profile_env.read_text(encoding="utf-8")
+    assert "CGYY_SSO_USERNAME" not in content
+    assert "CGYY_SSO_PASSWORD" not in content
+    assert "CGYY_PHONE=13800138000" in content
+    assert "legacy SSO 清理" in out

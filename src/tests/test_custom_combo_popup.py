@@ -139,3 +139,14 @@ def test_popup_is_horizontally_aligned_and_below_button_when_space_allows() -> N
     assert popup_rect.left() == button_top_left.x()
     assert popup_rect.top() >= button_bottom
     host.close()
+
+
+def test_multi_select_combo_uses_joined_summary_and_full_tooltip() -> None:
+    _app()
+    combo = CustomComboBox(multi_select=True)
+    combo.setItemsWithData([("Alice", "1"), ("Bob", "2"), ("Carol", "3")])
+    combo.setCheckedData(["1", "2"])
+
+    assert combo.currentText() == "Alice, Bob"
+    assert "Alice, Bob" in combo._button.text()  # noqa: SLF001
+    assert combo._button.toolTip() == "Alice, Bob"  # noqa: SLF001

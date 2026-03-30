@@ -14,6 +14,8 @@ from src.core.reservation_service import ReservationResult, ReservationService
 from src.core.selection_strategies import apply_pipeline
 from src.parsers.day_info import DayInfoParsed, SiteParam
 from src.parsers.slot_filter import SlotChoice, SlotSolution, find_solutions
+from src.utils.buddy_ids import (clamp_buddy_ids, split_buddy_ids,
+                                 supports_buddy_selection)
 
 if TYPE_CHECKING:
     from src.config.settings import ApiSettings, UserSettings
@@ -86,30 +88,26 @@ class ReservationWorkflow:
 
     def _resolve_buddy_ids(self, info: DayInfoParsed) -> str:
         """根据场地同伴人数要求和当前 profile 配置确定最终 buddyIds。"""
+        configured = split_buddy_ids(self.user_settings.buddy_ids)
         if not info.site_param:
-            return self.user_settings.buddy_ids
+            return ",".join(configured)
 
         buddy_num_min = max(0, int(info.site_param.buddy_num_min or 0))
         buddy_num_max = max(0, int(info.site_param.buddy_num_max or 0))
-
-        if buddy_num_min <= 0:
+        supports_buddy = supports_buddy_selection(
+            buddy_num_min=buddy_num_min,
+            buddy_num_max=buddy_num_max,
+            available_buddy_count=len(info.order_param_view.buddy_list) if info.order_param_view else 0,
+        )
+        if not supports_buddy:
             return ""
 
-        need = buddy_num_min
-        if buddy_num_max > 0:
-            need = min(need, buddy_num_max)
-
-        configured = [
-            s.strip()
-            for s in (self.user_settings.buddy_ids or "").split(",")
-            if s.strip()
-        ]
-        if len(configured) < need:
+        if len(configured) < buddy_num_min:
             raise BuddyConfigError(
                 f"该场地要求至少 {buddy_num_min} 名同伴，但当前 profile 中 CGYY_BUDDY_IDS 配置不足 "
-                f"(need={need}, got={len(configured)})，请先在当前 profile 中配置同伴 id。"
+                f"(need={buddy_num_min}, got={len(configured)})，请先在当前 profile 中配置同伴 id。"
             )
-        return ",".join(configured[:need])
+        return ",".join(clamp_buddy_ids(configured, buddy_num_max=buddy_num_max))
 
     def _verify_captcha_with_retry(
         self,
@@ -254,6 +252,22 @@ class ReservationWorkflow:
             start_time=start_time,
             slot_count=slot_count,
         )
+        return self._submit_solution(info, book_date, solution)
+
+    def run_solution_reservation(
+        self,
+        *,
+        search_date: str,
+        solution: SlotSolution,
+    ) -> FullReservationResult:
+        logger.info("按显式方案提交预约 date=%s slots=%d", search_date, len(solution.choices))
+        ok, msg, info = self.reservation_service.get_info_parsed(
+            search_date,
+            has_reserve_info=False,
+        )
+        if not ok or not info:
+            raise QueryError(f"查询场地信息失败：{msg}")
+        book_date = (info.reservation_date_list or [search_date])[0]
         return self._submit_solution(info, book_date, solution)
 
     def run_full_reservation(self, search_date: str | None = None) -> FullReservationResult:

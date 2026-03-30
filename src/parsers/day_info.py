@@ -20,7 +20,7 @@ class TimeSlot:
 
 @dataclass
 class SlotState:
-    """reservationStatus: 1=可预定, 2=系统标记不可预定, 4=已被预定。is_available 由 reservation_status==1 判定。"""
+    """reservationStatus: 1=可预定, 2=系统锁定, 3=待付款, 4=已预定。is_available 由 reservation_status==1 判定。"""
 
     reservation_status: int
     is_available: bool

@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import os
 from argparse import Namespace
-from pathlib import Path
 
 from src.api.captcha_api import CaptchaApi
 from src.api.catalog_api import CatalogApi
@@ -21,6 +20,7 @@ from src.core.captcha_service import CaptchaService
 from src.core.catalog_service import CatalogService
 from src.core.reservation_service import ReservationService
 from src.core.workflow import ReservationWorkflow
+from src.logging_setup import setup_logging
 from src.presenters.format import format_request_result
 from src.utils.crypto_utils import AesCbcEncryptor
 from src.utils.sign_utils import SignBuilder
@@ -31,16 +31,7 @@ SETTINGS_FREE_COMMANDS = {"logout", "profile"}
 
 
 def _setup_logging() -> None:
-    fmt = "%(asctime)s [%(levelname)s] %(message)s"
-    datefmt = "%H:%M:%S"
-    logging.basicConfig(level=logging.INFO, format=fmt, datefmt=datefmt)
-    root = logging.getLogger()
-    log_dir = Path(__file__).resolve().parents[1] / "logs"
-    log_dir.mkdir(exist_ok=True)
-    fh = logging.FileHandler(log_dir / "cgyy.log", encoding="utf-8")
-    fh.setLevel(logging.INFO)
-    fh.setFormatter(logging.Formatter(fmt, datefmt=datefmt))
-    root.addHandler(fh)
+    setup_logging()
 
 
 def merge_cli_overrides(

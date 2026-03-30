@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QEasingCurve, QParallelAnimationGroup, QPropertyAnimation, QVariantAnimation
+from PySide6.QtCore import (QEasingCurve, QParallelAnimationGroup,
+                            QPropertyAnimation, QVariantAnimation)
 from PySide6.QtWidgets import QGraphicsOpacityEffect, QWidget
 
 
