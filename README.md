@@ -1,92 +1,108 @@
 # Overview
 
-This repository contains a Python command-line application for interacting with
-an external web service through a layered architecture. It combines typed
-configuration loading, authenticated HTTP flows, response parsing, workflow
-orchestration, terminal-oriented output, and a PySide6 desktop workbench.
+`buaa-cgyy` is a layered Python client for BUAA CGYY venue reservation. It
+provides a CLI-first workflow for profile management, authentication refresh,
+availability queries, reservation submission, order handling, payment target
+generation, notifications, and optional desktop UI support.
 
 ## Highlights
 
-- Layered configuration loaded from a default profile plus optional profile-specific overrides
-- Layered HTTP clients for signed API requests and SSO page flows
-- Authentication pipeline with automatic refresh and per-profile credential persistence
-- Parsing, workflow, and presentation layers kept separate
-- Command-line entry points plus a desktop UI (`cgyy-ui`)
-- Unified notification support for macOS and Bark/iOS
-- Helper shell scripts for repeated execution and polling
+- Default installation is CLI-only; the desktop UI is an optional extra
+- Profile layering over `.env`, `.env.profiles/<name>.env`, and process env
+- Signed CGYY API client plus SSO / cashier page-flow clients
+- Automatic auth refresh, reservation submission, and payment target resolution
+- Mobile payment returns a final `weixin://...` scheme; desktop payment returns `schoolPayUrl`
+- Shared notifier for macOS and Bark / iOS
 
 ## Requirements
 
 - Python 3.9+
-- Dependencies are declared in `pyproject.toml`
 
 ## Installation
 
-Install the project and its dependencies:
+Install the CLI and core runtime:
 
 ```bash
 pip install -e .
 ```
 
-Or install directly:
+Or:
 
 ```bash
 pip install .
 ```
 
+Install the optional desktop UI:
+
+```bash
+pip install -e ".[ui]"
+```
+
+Or:
+
+```bash
+pip install ".[ui]"
+```
+
+`PySide6` is only included by the `ui` extra. Base installation keeps the CLI available by default.
+
 ## Usage
 
-Run the main entry point:
+Run the CLI:
 
 ```bash
-python -m src.main
+python -m src.main --help
 ```
 
 Or, if installed:
-
-```bash
-cgyy
-```
-
-Launch the desktop workbench:
-
-```bash
-python -m src.ui.main
-```
-
-Or, if installed:
-
-```bash
-cgyy-ui
-```
-
-Pass `--help` for the available commands:
 
 ```bash
 cgyy --help
 ```
 
-The CLI includes profile management, auth maintenance, reservation flows, and
-configuration diagnostics such as `config-doctor`.
+Typical commands:
 
-Detailed operator notes are maintained under `docs/`, especially
-[`docs/readme.md`](docs/readme.md).
+```bash
+cgyy info -d 2026-04-01
+cgyy reserve -P alice -d 2026-04-01 -s 18:00 -n 2
+cgyy pay -t D260331000665 --mode desktop
+cgyy pay -t D260331000665 --mode mobile
+```
+
+Payment behavior is intentionally split:
+
+- `desktop`: return `schoolPayUrl`; the user opens the page and chooses a payment method
+- `mobile`: resolve the final `weixin://...` scheme for direct jump or Bark notification deep link
+
+Launch the desktop workbench only after installing the `ui` extra:
+
+```bash
+python -m src.ui.main
+```
+
+Or:
+
+```bash
+cgyy-ui
+```
+
+Additional local operator notes may be kept under `docs/` when needed.
 
 ## Project Structure
 
 ```text
 src/
 ├── api/           # Endpoint definitions and API wrappers
-├── auth/          # Service auth state and business token exchange
+├── auth/          # Auth state, token exchange, and cashier bootstrap
 ├── cli/           # Argument parsing, validation, and command dispatch
 ├── config/        # Typed settings and .env read/write helpers
-├── core/          # Domain workflows and selection strategies
-├── http/          # Shared HTTP transport helpers
+├── core/          # Reservation and payment workflows
+├── http/          # Shared HTTP transport and header profiles
 ├── notifier.py    # Shared macOS / Bark notification entry point
 ├── parsers/       # Pure response parsers
 ├── presenters/    # Terminal formatting helpers
 ├── sso/           # SSO page flow and service adapters
-├── ui/            # PySide6 desktop workbench
+├── ui/            # Optional PySide6 desktop workbench
 ├── tests/         # Automated tests
 └── utils/         # Shared utilities
 scripts/           # Shell helpers and polling wrappers
