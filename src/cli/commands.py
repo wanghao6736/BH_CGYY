@@ -6,6 +6,7 @@ from argparse import Namespace
 from src.cli.context import CommandContext
 from src.cli.handlers.auth import run_auth_status, run_login, run_logout
 from src.cli.handlers.doctor import run_config_doctor
+from src.cli.handlers.payment import run_pay
 from src.cli.handlers.profile import run_profile
 from src.cli.handlers.query import (run_cancel_order, run_catalog,
                                     run_fetch_captcha, run_info,
@@ -36,6 +37,7 @@ __all__ = [
     "run_login",
     "run_logout",
     "run_order_detail",
+    "run_pay",
     "run_profile",
     "run_reserve",
     "run_verify_captcha",

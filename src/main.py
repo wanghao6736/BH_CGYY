@@ -9,6 +9,7 @@ from src.api.captcha_api import CaptchaApi
 from src.api.catalog_api import CatalogApi
 from src.api.client import ApiClient
 from src.api.reservation_api import ReservationApi
+from src.auth.cashier_auth_service import CashierBootstrapService
 from src.auth.manager import AuthManager
 from src.cli.commands import get_cmd
 from src.cli.commands import run as run_command
@@ -22,6 +23,7 @@ from src.config.settings import (ApiSettings, AuthSettings, SsoSettings,
                                  UserSettings, load_settings)
 from src.core.captcha_service import CaptchaService
 from src.core.catalog_service import CatalogService
+from src.core.payment_service import PaymentService
 from src.core.reservation_service import ReservationService
 from src.core.workflow import ReservationWorkflow
 from src.logging_setup import setup_logging
@@ -126,7 +128,24 @@ def build_app(
         api_settings=api_settings,
         user_settings=user_settings,
     )
-    return AppServices(workflow=workflow, catalog_service=catalog_service)
+    cashier_bootstrap_service = CashierBootstrapService(
+        sso_settings=sso_settings,
+        timeout_sec=sso_settings.timeout_sec or 15.0,
+        retry_count=api_settings.retry_count,
+        retry_interval_sec=api_settings.retry_interval_sec,
+    )
+    payment_service = PaymentService(
+        reservation_api=reservation_api,
+        cashier_bootstrap_service=cashier_bootstrap_service,
+        cashier_timeout_sec=sso_settings.timeout_sec or 15.0,
+        retry_count=api_settings.retry_count,
+        retry_interval_sec=api_settings.retry_interval_sec,
+    )
+    return AppServices(
+        workflow=workflow,
+        catalog_service=catalog_service,
+        payment_service=payment_service,
+    )
 
 
 def parse_cli_args(argv: list[str] | None = None) -> Namespace:

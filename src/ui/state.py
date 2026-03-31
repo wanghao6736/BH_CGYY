@@ -141,6 +141,8 @@ class ReserveOutcome:
     reservation_end_date: str = ""
     profile_name: str = ""
     display_name: str = ""
+    payment_target: str = ""
+    payment_message: str = ""
 
 
 @dataclass

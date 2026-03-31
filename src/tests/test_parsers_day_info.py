@@ -14,7 +14,7 @@ from src.parsers.slot_filter import find_solutions
 
 def _load_fixture(name: str) -> dict:
     root = Path(__file__).resolve().parents[2]
-    path = root / "docs" / name
+    path = root / "docs/responses" / name
     with path.open(encoding="utf-8") as f:
         return json.load(f)
 

@@ -41,6 +41,27 @@ def parse_submit_response(resp: dict) -> tuple[bool, str, Optional[SubmitParsed]
 
 
 @dataclass
+class OrderPayParsed:
+    school_pay_url: str
+
+
+def parse_order_pay_data(data: dict) -> Optional[OrderPayParsed]:
+    if not isinstance(data, dict):
+        return None
+    school_pay_url = data.get("schoolPayUrl")
+    if not school_pay_url:
+        return None
+    return OrderPayParsed(school_pay_url=str(school_pay_url))
+
+
+def parse_order_pay_response(resp: dict) -> tuple[bool, str, Optional[OrderPayParsed]]:
+    success, message = parse_success_message(resp)
+    data = resp.get("data") if isinstance(resp.get("data"), dict) else None
+    parsed = parse_order_pay_data(data) if success and data else None
+    return success, message, parsed
+
+
+@dataclass
 class OrderSpaceItem:
     id: int
     venue_space_id: int

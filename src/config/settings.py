@@ -6,6 +6,10 @@ from typing import Tuple
 from src.config.env_store import EnvStore
 from src.config.profiles import build_env_store, normalize_profile_name
 
+DEFAULT_SSO_LOGIN_URL = "https://sso.buaa.edu.cn/login"
+DEFAULT_SSO_SERVICE_URL = "https://cgyy.buaa.edu.cn/venue-server/sso/manageLogin"
+BUAA_CGYY_REFERER = "https://cgyy.buaa.edu.cn/"
+
 
 def _today_str() -> str:
     return date.today().strftime("%Y-%m-%d")
@@ -25,7 +29,7 @@ class ApiSettings:
     captcha_delay_min: float = 1.0
     captcha_delay_max: float = 2.5
     # 请求失败重试
-    retry_count: int = 3
+    retry_count: int = 5
     retry_interval_sec: float = 2.0
 
 
@@ -59,8 +63,8 @@ class AuthSettings:
 @dataclass
 class SsoSettings:
     enabled: bool = False
-    login_base_url: str = ""
-    service_url: str = ""
+    login_base_url: str = DEFAULT_SSO_LOGIN_URL
+    service_url: str = DEFAULT_SSO_SERVICE_URL
     username: str = ""
     password: str = ""
     max_redirects: int = 10
@@ -83,10 +87,6 @@ def load_settings(
         default_search_date=env.get_str("CGYY_DEFAULT_SEARCH_DATE", ApiSettings.default_search_date),
         aes_cbc_key=env.get_str("CGYY_AES_CBC_KEY", ApiSettings.aes_cbc_key),
         aes_cbc_iv=env.get_str("CGYY_AES_CBC_IV", ApiSettings.aes_cbc_iv),
-        captcha_delay_min=env.get_float("CGYY_CAPTCHA_DELAY_MIN", ApiSettings.captcha_delay_min),
-        captcha_delay_max=env.get_float("CGYY_CAPTCHA_DELAY_MAX", ApiSettings.captcha_delay_max),
-        retry_count=env.get_int("CGYY_RETRY_COUNT", ApiSettings.retry_count),
-        retry_interval_sec=env.get_float("CGYY_RETRY_INTERVAL_SEC", ApiSettings.retry_interval_sec),
     )
     user = UserSettings(
         profile_name=active_profile,
@@ -102,10 +102,6 @@ def load_settings(
         reservation_start_time=env.get_str("CGYY_RESERVATION_START_TIME", UserSettings.reservation_start_time),
         reservation_slot_count=env.get_int(
             "CGYY_RESERVATION_SLOT_COUNT", UserSettings.reservation_slot_count),
-        order_pin_x_min=env.get_int("CGYY_ORDER_PIN_X_MIN", UserSettings.order_pin_x_min),
-        order_pin_x_max=env.get_int("CGYY_ORDER_PIN_X_MAX", UserSettings.order_pin_x_max),
-        order_pin_y_min=env.get_int("CGYY_ORDER_PIN_Y_MIN", UserSettings.order_pin_y_min),
-        order_pin_y_max=env.get_int("CGYY_ORDER_PIN_Y_MAX", UserSettings.order_pin_y_max),
         order_price=UserSettings.order_price,
         selection_strategy=env.get_str(
             "CGYY_SELECTION_STRATEGY", UserSettings.selection_strategy
@@ -120,8 +116,5 @@ def load_settings(
         service_url=env.get_str("CGYY_SSO_SERVICE_URL", SsoSettings.service_url),
         username=env.get_str("CGYY_SSO_USERNAME", SsoSettings.username),
         password=env.get_str("CGYY_SSO_PASSWORD", SsoSettings.password),
-        max_redirects=env.get_int("CGYY_SSO_MAX_REDIRECTS", SsoSettings.max_redirects),
-        timeout_sec=env.get_float("CGYY_SSO_TIMEOUT_SEC", SsoSettings.timeout_sec),
-        persist_to_env=env.get_bool("CGYY_AUTH_PERSIST_TO_ENV", SsoSettings.persist_to_env),
     )
     return api, user, auth, sso

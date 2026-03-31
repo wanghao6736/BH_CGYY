@@ -21,7 +21,13 @@ _DEFAULT_TITLE = "CGYY"
 _MAX_MESSAGE_LENGTH = 500
 _BARK_GROUP = "CGYY"
 _BARK_ICON = "https://www.buaa.edu.cn/images/foot-bicon2.png"
-_BARK_URL = "https://cgyy.buaa.edu.cn/venue/orders"
+
+
+def describe_payment_target(target: str) -> str:
+    normalized = (target or "").strip()
+    if normalized.startswith("weixin://"):
+        return "微信支付跳转"
+    return "支付页面"
 
 
 def _normalize_text(value: str, *, fallback: str = "") -> str:
@@ -41,7 +47,7 @@ def _load_store(
     return build_env_store(profile_name, root=root, environ=runtime_environ)
 
 
-def _send_ios_notification(title: str, message: str, *, store) -> bool:
+def _send_ios_notification(title: str, message: str, *, store, url: str = "") -> bool:
     bark_url = store.get_str("CGYY_BARK_URL", "").strip()
     bark_key = store.get_str("CGYY_BARK_KEY", "").strip()
     if not bark_url or not bark_key:
@@ -53,8 +59,10 @@ def _send_ios_notification(title: str, message: str, *, store) -> bool:
         "sound": "birdsong",
         "icon": _BARK_ICON,
         "group": _BARK_GROUP,
-        "url": _BARK_URL,
     }
+    normalized_url = _normalize_text(url)
+    if normalized_url:
+        payload["url"] = normalized_url
     target = f"{bark_url.rstrip('/')}/{bark_key}"
     try:
         response = requests.post(target, json=payload, timeout=5)
@@ -97,6 +105,7 @@ def send_notification(
     title: str,
     message: str = "",
     *,
+    url: str = "",
     profile_name: str | None = None,
     root: Path | None = None,
     environ: Mapping[str, str] | None = None,
@@ -115,6 +124,7 @@ def send_notification(
             normalized_title,
             normalized_message,
             store=store,
+            url=url,
         ):
             sent_channels.append(channel)
 
@@ -161,6 +171,36 @@ def build_submit_notification_message(
         display_name=display_name,
         profile_name=profile_name,
     )
+
+
+def build_payment_notification_message(
+    *,
+    success: bool,
+    message: str,
+    order_id: int = 0,
+    trade_no: str = "",
+    reservation_start_date: str = "",
+    reservation_end_date: str = "",
+    display_name: str = "",
+    profile_name: str = "",
+    payment_target: str = "",
+    payment_message: str = "",
+) -> str:
+    text = build_submit_notification_message(
+        success=success,
+        message=message,
+        order_id=order_id,
+        trade_no=trade_no,
+        reservation_start_date=reservation_start_date,
+        reservation_end_date=reservation_end_date,
+        display_name=display_name,
+        profile_name=profile_name,
+    )
+    if payment_target:
+        return f"{text}\n🎯 {describe_payment_target(payment_target)} {payment_target}"
+    if payment_message:
+        return f"{text}\n💳 支付处理 {payment_message}"
+    return text
 
 
 def _read_message_from_stdin() -> str:

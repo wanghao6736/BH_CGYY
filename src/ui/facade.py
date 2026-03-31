@@ -49,6 +49,7 @@ class UiFacade:
         profile_manager: ProfileManager | None = None,
         auth_manager_factory: Callable[[str], AuthManager] | None = None,
         workflow_factory=None,
+        payment_service_factory=None,
         catalog_service_factory: Callable[[str], CatalogService] | None = None,
     ) -> None:
         self._root = root
@@ -56,6 +57,7 @@ class UiFacade:
         self.profile_manager = profile_manager or ProfileManager(root=root, environ=self._environ)
         self.auth_manager_factory = auth_manager_factory or self._build_auth_manager
         self.workflow_factory = workflow_factory or self._build_workflow
+        self.payment_service_factory = payment_service_factory or self._build_payment_service
         self._uses_default_catalog_service_factory = catalog_service_factory is None
         self.catalog_service_factory = catalog_service_factory or self._build_catalog_service
         self._catalog_cache: dict[str, VenueCatalogState] = {}
@@ -153,6 +155,29 @@ class UiFacade:
             ensure_auth=not query.skip_auth_probe,
         )
         return services.workflow
+
+    def _build_payment_service(self, profile_name: str, query: BoardQuery):
+        env_store = self._env_store(profile_name)
+        api_settings, user_settings, auth_settings, sso_settings = load_settings(
+            profile_name,
+            env_store=env_store,
+        )
+        api_settings.venue_site_id = query.venue_site_id
+        api_settings.default_search_date = query.date
+        user_settings.reservation_start_time = query.start_time
+        user_settings.reservation_slot_count = query.slot_count
+        self._apply_runtime_auth(profile_name, auth_settings)
+        services = build_app(
+            api_settings=api_settings,
+            user_settings=user_settings,
+            auth_settings=auth_settings,
+            sso_settings=sso_settings,
+            env_store=env_store,
+            ensure_auth=True,
+        )
+        if services.payment_service is None:
+            raise RuntimeError("PaymentService 初始化失败")
+        return services.payment_service
 
     def _build_catalog_service(self, profile_name: str, *, skip_auth_probe: bool = False) -> CatalogService:
         env_store = self._env_store(profile_name)
@@ -360,15 +385,16 @@ class UiFacade:
         if not request.solution.choices:
             raise RuntimeError("未提供可提交的预约方案")
         first_choice = request.solution.choices[0]
+        query = BoardQuery(
+            profile_name=request.profile_name,
+            venue_site_id=request.venue_site_id,
+            date=request.date,
+            start_time=first_choice.start_time,
+            slot_count=request.solution.slot_count,
+        )
         workflow = self.workflow_factory(
             request.profile_name,
-            BoardQuery(
-                profile_name=request.profile_name,
-                venue_site_id=request.venue_site_id,
-                date=request.date,
-                start_time=first_choice.start_time,
-                slot_count=request.solution.slot_count,
-            ),
+            query,
         )
         result = workflow.run_solution_reservation(
             search_date=request.date,
@@ -376,6 +402,15 @@ class UiFacade:
         )
         submit = result.reservation.submit_parsed
         display_name = request.display_name or self._display_name_for_profile(request.profile_name)
+        payment_target = ""
+        payment_message = ""
+        if result.reservation.success and submit is not None:
+            try:
+                payment_service = self.payment_service_factory(request.profile_name, query)
+                payment = payment_service.create_reservation_payment(submit.trade_no)
+                payment_target = payment.resolved_target
+            except Exception as exc:
+                payment_message = str(exc)
         return ReserveOutcome(
             success=result.reservation.success,
             message=result.reservation.message,
@@ -385,7 +420,10 @@ class UiFacade:
             reservation_end_date=submit.reservation_end_date if submit else "",
             profile_name=request.profile_name,
             display_name=display_name,
+            payment_target=payment_target,
+            payment_message=payment_message,
         )
+
 
 def build_board_state(
     *,

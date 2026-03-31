@@ -49,8 +49,8 @@ class CgyyAdapter:
         cookies = page_client.cookies_dict()
         cookie = "; ".join(f"{k}={v}" for k, v in cookies.items())
         cg_auth = ""
-        if self.auth_header_name in page_client._session.headers:
-            cg_auth = str(page_client._session.headers[self.auth_header_name])
+        if self.auth_header_name in page_client._headers:
+            cg_auth = str(page_client._headers[self.auth_header_name])
         return ServiceAuthState(
             service_name=self.service_name,
             cookie=cookie,

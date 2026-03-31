@@ -78,6 +78,7 @@ def test_request_notification_runs_via_background_runner(monkeypatch) -> None:
     controller.request_notification(
         "CGYY 预约成功",
         "message",
+        url="weixin://wap/pay?prepayid=123",
         profile_name="default",
     )
 
@@ -89,6 +90,6 @@ def test_request_notification_runs_via_background_runner(monkeypatch) -> None:
         (
             "CGYY 预约成功",
             "message",
-            {"profile_name": "default"},
+            {"url": "weixin://wap/pay?prepayid=123", "profile_name": "default"},
         )
     ]

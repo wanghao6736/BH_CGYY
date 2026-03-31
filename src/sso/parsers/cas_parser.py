@@ -5,7 +5,7 @@ from __future__ import annotations
 import html
 import re
 from typing import Dict, Optional
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
 
 from src.sso.models import CaptchaChallenge, LoginPageContext
 
@@ -154,9 +154,21 @@ def parse_login_page(html_text: str, page_url: str) -> LoginPageContext:
     captcha = detect_captcha(html_text, page_url)
     lowered = (html_text or "").lower()
     is_continue_page = "ignoreandcontinue" in lowered or "continue" in lowered and "password" not in lowered
+    form_action = urljoin(page_url, action or "")
+    if form_action:
+        page_parts = urlsplit(page_url)
+        action_parts = urlsplit(form_action)
+        if (
+            action_parts.scheme == page_parts.scheme
+            and action_parts.netloc == page_parts.netloc
+            and action_parts.path == page_parts.path
+            and not action_parts.query
+            and page_parts.query
+        ):
+            form_action = page_url
     return LoginPageContext(
         page_url=page_url,
-        form_action=urljoin(page_url, action or ""),
+        form_action=form_action,
         hidden_fields=hidden_fields,
         username_field=username_field,
         password_field=password_field,

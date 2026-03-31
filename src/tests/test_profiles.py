@@ -4,7 +4,10 @@ from src.auth.manager import AuthManager
 from src.auth.models import ServiceAuthState
 from src.config.env_store import ENC_PREFIX
 from src.config.profiles import ProfileManager, build_env_store
-from src.config.settings import ApiSettings, AuthSettings, SsoSettings, load_settings
+from src.config.settings import (DEFAULT_SSO_LOGIN_URL,
+                                 DEFAULT_SSO_SERVICE_URL, ApiSettings,
+                                 AuthSettings, SsoSettings, UserSettings,
+                                 load_settings)
 
 
 def test_load_settings_merges_default_and_profile_values(tmp_path: Path) -> None:
@@ -133,3 +136,52 @@ def test_auth_manager_persists_auth_to_active_profile(tmp_path: Path) -> None:
 
     assert "CGYY_COOKIE=enc:v1:" in profile_env.read_text(encoding="utf-8")
     assert default_env.read_text(encoding="utf-8") == ""
+
+
+def test_load_settings_uses_code_defaults_for_sso_urls(tmp_path: Path) -> None:
+    (tmp_path / ".env").write_text("CGYY_SSO_ENABLED=1\n", encoding="utf-8")
+
+    _, _, _, sso_settings = load_settings(
+        env_store=build_env_store(None, root=tmp_path, environ={}),
+    )
+
+    assert sso_settings.login_base_url == DEFAULT_SSO_LOGIN_URL
+    assert sso_settings.service_url == DEFAULT_SSO_SERVICE_URL
+
+
+def test_load_settings_ignores_low_frequency_runtime_tuning_envs(tmp_path: Path) -> None:
+    (tmp_path / ".env").write_text(
+        "\n".join(
+            [
+                "CGYY_RETRY_COUNT=9",
+                "CGYY_RETRY_INTERVAL_SEC=9.9",
+                "CGYY_CAPTCHA_DELAY_MIN=0.1",
+                "CGYY_CAPTCHA_DELAY_MAX=0.2",
+                "CGYY_ORDER_PIN_X_MIN=1",
+                "CGYY_ORDER_PIN_X_MAX=2",
+                "CGYY_ORDER_PIN_Y_MIN=3",
+                "CGYY_ORDER_PIN_Y_MAX=4",
+                "CGYY_SSO_TIMEOUT_SEC=1.5",
+                "CGYY_SSO_MAX_REDIRECTS=1",
+                "CGYY_AUTH_PERSIST_TO_ENV=0",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    api_settings, user_settings, _, sso_settings = load_settings(
+        env_store=build_env_store(None, root=tmp_path, environ={}),
+    )
+
+    assert api_settings.retry_count == ApiSettings.retry_count
+    assert api_settings.retry_interval_sec == ApiSettings.retry_interval_sec
+    assert api_settings.captcha_delay_min == ApiSettings.captcha_delay_min
+    assert api_settings.captcha_delay_max == ApiSettings.captcha_delay_max
+    assert user_settings.order_pin_x_min == UserSettings.order_pin_x_min
+    assert user_settings.order_pin_x_max == UserSettings.order_pin_x_max
+    assert user_settings.order_pin_y_min == UserSettings.order_pin_y_min
+    assert user_settings.order_pin_y_max == UserSettings.order_pin_y_max
+    assert sso_settings.timeout_sec == SsoSettings.timeout_sec
+    assert sso_settings.max_redirects == SsoSettings.max_redirects
+    assert sso_settings.persist_to_env is SsoSettings.persist_to_env

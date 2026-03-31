@@ -8,6 +8,7 @@ if TYPE_CHECKING:
     from src.config.env_store import EnvStore
     from src.config.profiles import ProfileManager
     from src.core.catalog_service import CatalogService
+    from src.core.payment_service import PaymentService
     from src.core.workflow import ReservationWorkflow
 
 
@@ -15,6 +16,7 @@ if TYPE_CHECKING:
 class AppServices:
     workflow: "ReservationWorkflow | None" = None
     catalog_service: "CatalogService | None" = None
+    payment_service: "PaymentService | None" = None
 
 
 @dataclass

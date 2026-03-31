@@ -13,14 +13,14 @@ from src.parsers.slot_filter import SlotChoice, SlotSolution
 from src.ui.form_options import build_date_options
 from src.ui.state import (BoardCell, BoardRow, BoardState, BoardStatus,
                           BookingFormState, BuddyOption, LoginFormState,
-                          PollingConfigState, ProfileOption, SelectionState,
-                          PollingStatus, ReserveOutcome, SessionState,
+                          PollingConfigState, PollingStatus, ProfileOption,
+                          ReserveOutcome, SelectionState, SessionState,
                           SessionStatus, SettingsFormState, VenueCatalogItem,
                           VenueCatalogState)
+from src.ui.widgets.activity_panel import ActivityPanel
 from src.ui.widgets.board_panel import BoardPanel
 from src.ui.widgets.booking_card import BookingCard
 from src.ui.widgets.login_panel import LoginWindow
-from src.ui.widgets.activity_panel import ActivityPanel
 from src.ui.widgets.panel_dialog import PanelDialog
 from src.ui.widgets.poll_dialog import PollDialog
 from src.ui.window import MainWindow
@@ -79,9 +79,10 @@ class FakeController:
         title: str,
         message: str,
         *,
+        url: str = "",
         profile_name: str | None = None,
     ) -> None:
-        self.notification_requests.append((title, message, profile_name))
+        self.notification_requests.append((title, message, url, profile_name))
 
 
 def _choice(space_id: int, time_id: int, space_name: str, start: str, end: str, fee: float = 25.0) -> SlotChoice:
@@ -228,7 +229,7 @@ def test_booking_card_selects_matching_site_after_catalog_injection() -> None:
 
 def test_panel_dialog_apply_and_collect_state_roundtrip() -> None:
     _app()
-    target_date = QDate.currentDate().addDays(3).toString("yyyy-MM-dd")
+    target_date = QDate.currentDate().addDays(0).toString("yyyy-MM-dd")
     dialog = PanelDialog()
 
     dialog.apply_state(
@@ -610,9 +611,9 @@ def test_main_window_board_load_updates_polling_state_via_coordinator() -> None:
     assert window.polling_state.last_message == "检查完成"
     assert window.panel_dialog.phone_input.text() == "13900000000"
     assert window.panel_dialog.collect_state().buddy_ids == "1,2"
-    assert window.booking_card.date_combo.count() == 7
+    assert window.booking_card.date_combo.count() == 3
     assert window.booking_card.date_combo.itemText(0) == build_date_options()[0]
-    assert window.panel_dialog.settings_date_input.count() == 7
+    assert window.panel_dialog.settings_date_input.count() == 3
     assert window.panel_dialog.settings_date_input.itemText(0) == build_date_options()[0]
     assert window.booking_card.time_combo.currentText() == "-"
     assert "场地ID-57 buddy ID 1,2" in window.booking_card.target_summary.text()
@@ -827,6 +828,7 @@ def test_main_window_reserve_success_sends_notification_uses_result_context() ->
             reservation_end_date="2026-04-01 19:00",
             profile_name="default",
             display_name="默认用户",
+            payment_target="weixin://wap/pay?prepayid=123",
         ),
     )
 
@@ -836,7 +838,9 @@ def test_main_window_reserve_success_sends_notification_uses_result_context() ->
             "✅ [成功] 提交订单：OK\n"
             "   📌 订单ID 456 | 编号 D123\n"
             "   🕐 预约时间 2026-04-01 18:00 ~ 2026-04-01 19:00\n"
-            "   👤 预定人 默认用户 | profile default",
+            "   👤 预定人 默认用户 | profile default\n"
+            "🎯 微信支付跳转 weixin://wap/pay?prepayid=123",
+            "weixin://wap/pay?prepayid=123",
             "default",
         )
     ]

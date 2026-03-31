@@ -13,7 +13,7 @@ from src.parsers.catalog import parse_catalog_data, parse_catalog_response
 
 def _load_fixture(name: str) -> dict:
     root = Path(__file__).resolve().parents[2]
-    path = root / "docs" / name
+    path = root / "docs/responses" / name
     with path.open(encoding="utf-8") as f:
         return json.load(f)
 

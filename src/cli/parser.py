@@ -1,4 +1,4 @@
-"""CGYY CLI 参数解析。子命令：reserve（默认）, info, catalog, config-doctor, fetch-captcha, verify-captcha, order-detail, cancel-order, login, auth-status, logout, profile。"""
+"""CGYY CLI 参数解析。子命令：reserve（默认）, info, catalog, pay, config-doctor, fetch-captcha, verify-captcha, order-detail, cancel-order, login, auth-status, logout, profile。"""
 from __future__ import annotations
 
 import argparse
@@ -89,6 +89,7 @@ def build_parser() -> argparse.ArgumentParser:
         ("reserve", "完整预约（默认）"),
         ("info", "查询场地信息与可预约方案"),
         ("catalog", "场地目录"),
+        ("pay", "拉起订单支付并解析 cashier 支付目标"),
         ("fetch-captcha", "获取验证码"),
         ("verify-captcha", "识别并校验验证码"),
         ("order-detail", "查询订单详情"),
@@ -99,6 +100,20 @@ def build_parser() -> argparse.ArgumentParser:
     ]:
         subp = sub.add_parser(name, help=help_text)
         _add_common_options(subp)
+
+    pay_parser = sub.choices["pay"]
+    pay_parser.add_argument(
+        "--mode",
+        choices=("desktop", "mobile"),
+        default="desktop",
+        help="支付目标类型：desktop 返回 schoolPayUrl，mobile 解析 weixin deeplink",
+    )
+    pay_parser.add_argument(
+        "--pay-way-name",
+        dest="pay_way_name",
+        default=None,
+        help="覆盖默认支付方式；仅 mobile 生效，默认 wxpay_wap",
+    )
 
     doctor_parser = sub.add_parser("config-doctor", help="诊断当前 profile 配置与鉴权状态")
     _add_profile_option(doctor_parser)

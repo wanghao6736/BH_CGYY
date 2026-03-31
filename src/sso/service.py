@@ -60,6 +60,8 @@ class SsoLoginService:
         context = self.provider.parse_login_page(entry_resp)
         if not context.form_action:
             raise SsoLoginFailed("未找到统一认证登录表单")
+        if not credentials.username or not credentials.password:
+            raise SsoLoginFailed("统一认证需要账号密码，但当前未配置")
         if context.captcha_required and not credentials.captcha:
             raise SsoCaptchaRequired("统一认证页面要求验证码，当前未提供验证码能力")
 

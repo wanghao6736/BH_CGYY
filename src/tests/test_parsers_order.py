@@ -12,7 +12,7 @@ from src.parsers.order import (parse_order_detail_data,
 
 def _load_fixture(name: str) -> dict:
     root = Path(__file__).resolve().parents[2]
-    with (root / "docs" / name).open(encoding="utf-8") as f:
+    with (root / "docs/responses" / name).open(encoding="utf-8") as f:
         return json.load(f)
 
 

@@ -4,12 +4,18 @@ from pathlib import Path
 
 from src.auth.models import AuthBootstrapResult, ServiceAuthState
 from src.config.profiles import ProfileSummary
+from src.core.payment_service import PaymentTargetResult
+from src.core.reservation_service import ReservationResult
+from src.core.workflow import FullReservationResult
+from src.parsers.cashier import (CashierTransactionParsed,
+                                 CashierUrlParsed)
 from src.parsers.catalog import CatalogParsed, SiteItem
 from src.parsers.day_info import (Buddy, DayInfoParsed, OrderParamView,
                                   SiteParam, SlotState, SpaceSchedule,
                                   TimeSlot)
+from src.parsers.order import SubmitParsed
 from src.parsers.slot_filter import SlotChoice, SlotSolution
-from src.ui.facade import BoardQuery, UiFacade
+from src.ui.facade import BoardQuery, ReserveRequest, UiFacade
 from src.ui.state import BoardStatus, SessionStatus
 
 
@@ -61,10 +67,61 @@ class FakeWorkflow:
         self.parsed = parsed
         self.solutions = list(solutions or [])
         self.last_query = None
+        self.last_solution_reservation = None
 
     def get_solutions(self, query):
         self.last_query = query
         return self.parsed, "2026-03-22", list(self.solutions)
+
+    def run_solution_reservation(self, *, search_date: str, solution: SlotSolution):
+        self.last_solution_reservation = (search_date, solution)
+        return FullReservationResult(
+            captcha=type("CaptchaResultStub", (), {"success": True, "message": "OK"})(),
+            reservation=ReservationResult(
+                success=True,
+                message="OK",
+                raw={},
+                submit_parsed=SubmitParsed(
+                    order_id=456,
+                    trade_no="D123",
+                    reservation_start_date="2026-04-01 18:00",
+                    reservation_end_date="2026-04-01 19:00",
+                ),
+            ),
+            solutions=[solution],
+            site_param=self.parsed.site_param,
+            reservation_date=search_date,
+        )
+
+
+class FakePaymentService:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def create_reservation_payment(self, venue_trade_no: str) -> PaymentTargetResult:
+        self.calls.append(venue_trade_no)
+        return PaymentTargetResult(
+            mode="mobile",
+            resolved_target="weixin://wap/pay?prepayid=123",
+            school_pay_url="https://cashier.cc-pay.cn/cashier?id=abc123&channel=BUAASSO",
+            pay_way_name="wxpay_wap",
+            cashier=CashierUrlParsed(
+                origin="https://cashier.cc-pay.cn",
+                cashier_id="abc123",
+                channel="BUAASSO",
+            ),
+            transaction=CashierTransactionParsed(
+                transaction_id="txn-1",
+                goods_id="goods-1",
+                money=70.0,
+                status="wait_payer_pay",
+                subject="羽毛球",
+                body="综合馆",
+                target_order_id="760907",
+                notify_url="https://notify.example",
+                return_url="https://return.example",
+            ),
+        )
 
 
 class FakeCatalogService:
@@ -116,8 +173,20 @@ def test_ui_facade_builds_profile_session_and_board_state() -> None:
         solutions=[
             SlotSolution(
                 choices=[
-                    SlotChoice(space_id=101, time_id=1, space_name="A1", start_time="18:00", end_time="18:30", order_fee=25.0),
-                    SlotChoice(space_id=101, time_id=2, space_name="A1", start_time="18:30", end_time="19:00", order_fee=25.0),
+                    SlotChoice(
+                        space_id=101,
+                        time_id=1,
+                        space_name="A1",
+                        start_time="18:00",
+                        end_time="18:30",
+                        order_fee=25.0),
+                    SlotChoice(
+                        space_id=101,
+                        time_id=2,
+                        space_name="A1",
+                        start_time="18:30",
+                        end_time="19:00",
+                        order_fee=25.0),
                 ],
                 total_fee=50.0,
                 slot_count=2,
@@ -290,3 +359,57 @@ def test_save_profile_patch_takes_effect_without_restart(tmp_path: Path) -> None
     assert saved.start_time == "19:00"
     assert saved.slot_count == 3
     assert reloaded == saved
+
+
+def test_ui_facade_reserve_auto_resolves_payment_target() -> None:
+    parsed = DayInfoParsed(
+        reservation_date_list=["2026-03-22"],
+        time_slots=[],
+        space_schedules_by_date={},
+        order_param_view=None,
+        site_param=SiteParam(
+            site_name="羽毛球",
+            venue_name="2号馆",
+            campus_name="学院路",
+            venue_site_id=57,
+        ),
+    )
+    workflow = FakeWorkflow(parsed)
+    payment_service = FakePaymentService()
+    solution = SlotSolution(
+        choices=[
+            SlotChoice(
+                space_id=101,
+                time_id=1,
+                space_name="A1",
+                start_time="18:00",
+                end_time="18:30",
+                order_fee=25.0,
+            )
+        ],
+        total_fee=25.0,
+        slot_count=1,
+        total_hours=0.5,
+    )
+    facade = UiFacade(
+        profile_manager=FakeProfileManager(),
+        auth_manager_factory=lambda profile_name: FakeAuthManager(),
+        workflow_factory=lambda profile_name, query: workflow,
+        payment_service_factory=lambda profile_name, query: payment_service,
+        catalog_service_factory=lambda profile_name: FakeCatalogService(),
+    )
+
+    outcome = facade.reserve(
+        ReserveRequest(
+            profile_name="default",
+            venue_site_id=57,
+            date="2026-04-01",
+            solution=solution,
+            display_name="默认用户",
+        )
+    )
+
+    assert outcome.success is True
+    assert outcome.trade_no == "D123"
+    assert outcome.payment_target == "weixin://wap/pay?prepayid=123"
+    assert payment_service.calls == ["D123"]

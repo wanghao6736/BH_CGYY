@@ -60,7 +60,7 @@ class SsoBootstrapService:
         for name, value in auth_context.cookies.items():
             page_client._session.cookies.set(name, value)
         if auth_context.cg_authorization:
-            page_client._session.headers["cgAuthorization"] = auth_context.cg_authorization
+            page_client._headers["cgAuthorization"] = auth_context.cg_authorization
         return page_client
 
     def _build_service_adapter(self) -> ServiceAdapter:
