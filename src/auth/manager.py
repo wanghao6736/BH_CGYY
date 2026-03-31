@@ -11,6 +11,8 @@ from src.auth.exceptions import AuthUnavailableError
 from src.auth.models import AuthBootstrapResult, ServiceAuthState
 from src.auth.services import AuthProbeService, SsoBootstrapService
 from src.config.env_store import EnvStore
+from src.config.profiles import (ensure_managed_cred_key,
+                                 infer_root_from_env_path)
 from src.config.settings import ApiSettings, AuthSettings, SsoSettings
 from src.sso.models import Credentials
 from src.utils.sign_utils import SignBuilder
@@ -73,6 +75,10 @@ class AuthManager:
             logger.info("已跳过鉴权持久化")
             return
         try:
+            ensure_managed_cred_key(
+                self.env_store.environ,
+                root=infer_root_from_env_path(self.env_store.path),
+            )
             self.env_store.set_values(
                 {
                     "CGYY_COOKIE": state.cookie,

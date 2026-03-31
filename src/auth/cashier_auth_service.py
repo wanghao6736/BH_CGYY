@@ -4,9 +4,10 @@ import logging
 from dataclasses import dataclass, field
 from urllib.parse import parse_qs, urljoin, urlsplit
 
+from src.api.endpoints import CgyyEndpoints
 from src.auth.exceptions import CashierBootstrapError
 from src.auth.models import AuthContext, ServiceAuthState
-from src.config.settings import BUAA_CGYY_REFERER, SsoSettings
+from src.config.settings import SsoSettings
 from src.http.header_profiles import (DESKTOP_BROWSER_USER_AGENT,
                                       build_page_headers)
 from src.sso.adapters.cashier_adapter import CashierAdapter
@@ -103,7 +104,7 @@ class CashierBootstrapService:
     ) -> ServiceAuthState:
         page_client = self._build_page_client(cookie_header)
 
-        entry = self._request_redirect(page_client, cashier_url, BUAA_CGYY_REFERER)
+        entry = self._request_redirect(page_client, cashier_url, CgyyEndpoints.DOMAIN + "/")
         if not entry.location:
             raise CashierBootstrapError("cashier 入口未返回跳转地址")
         pass_login_url = urljoin(cashier_url, entry.location)

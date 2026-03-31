@@ -6,6 +6,7 @@ import pytest
 from src.cli.commands import run as run_command
 from src.cli.handlers.registry import get_command_kind
 from src.config.env_store import EnvStore
+from src.config.profiles import build_env_store, managed_cred_key_path
 from src.config.settings import ApiSettings, UserSettings
 from src.main import (build_command_context, main, merge_cli_overrides,
                       parse_cli_args)
@@ -256,6 +257,38 @@ def test_build_command_context_for_config_doctor_skips_service_build(
     assert context.profile_manager == "profile-manager"
     assert context.services.workflow is None
     assert context.services.catalog_service is None
+
+
+def test_build_command_context_loads_managed_cred_key(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    env_path = tmp_path / ".env"
+    seeded_store = EnvStore(
+        path=env_path,
+        paths=[env_path],
+        environ={"CGYY_CRED_KEY": "unit-test-key"},
+    )
+    seeded_store.set_values({"CGYY_COOKIE": "cookie-token"})
+    managed_cred_key_path(tmp_path).parent.mkdir(parents=True, exist_ok=True)
+    managed_cred_key_path(tmp_path).write_text("unit-test-key\n", encoding="utf-8")
+
+    monkeypatch.setattr(
+        "src.main.build_env_store",
+        lambda name, environ=None: build_env_store(name, root=tmp_path, environ=environ),
+    )
+    monkeypatch.setattr(
+        "src.main.ProfileManager",
+        lambda *args, **kwargs: __import__("src.config.profiles", fromlist=["ProfileManager"]).ProfileManager(
+            root=tmp_path,
+            environ=kwargs.get("environ") or {},
+        ),
+    )
+
+    context = build_command_context(Namespace(cmd="logout", profile="default"), environ={})
+
+    assert context.env_store.get_str("CGYY_COOKIE", "") == "cookie-token"
+    assert context.runtime_environ["CGYY_CRED_KEY"] == "unit-test-key"
 
 
 def test_main_smoke_uses_real_parser_and_dispatches_profile_list(monkeypatch: pytest.MonkeyPatch) -> None:

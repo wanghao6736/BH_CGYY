@@ -10,7 +10,7 @@
 **/.DS_Store
 **/*.pyc
 **/.env
-**/.env.profiles/.gui_cred_key
+**/.env.profiles/.cgyy_cred_key
 .worktrees/
 
 src/legacy/**

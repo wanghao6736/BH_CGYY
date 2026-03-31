@@ -9,8 +9,7 @@ from src.api.reservation_api import ReservationApi
 from src.auth.cashier_auth_service import CashierBootstrapService
 from src.core.exceptions import PaymentError
 from src.parsers.cashier import (CashierTransactionParsed, CashierUrlParsed,
-                                 choose_pay_way,
-                                 extract_weixin_scheme,
+                                 choose_pay_way, extract_weixin_scheme,
                                  parse_cashier_pay_response,
                                  parse_cashier_pay_ways_response,
                                  parse_cashier_transaction_response,

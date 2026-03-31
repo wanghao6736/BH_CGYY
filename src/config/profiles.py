@@ -2,16 +2,18 @@ from __future__ import annotations
 
 import os
 import re
+import secrets
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping
+from typing import Mapping, MutableMapping
 
-from src.config.env_store import ENC_PREFIX, EnvStore
+from src.config.env_store import ENC_PREFIX, SENSITIVE_ENV_KEYS, EnvStore
 
 DEFAULT_PROFILE = "default"
 PROFILE_DIRNAME = ".env.profiles"
 PROFILE_ENV_VAR = "CGYY_PROFILE"
 DISPLAY_NAME_ENV_VAR = "CGYY_DISPLAY_NAME"
+MANAGED_CRED_KEY_FILENAME = ".cgyy_cred_key"
 
 PROFILE_NAME_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
@@ -40,6 +42,65 @@ def profile_dir(root: Path | None = None) -> Path:
     return (root or project_root()) / PROFILE_DIRNAME
 
 
+def managed_cred_key_path(root: Path | None = None) -> Path:
+    return profile_dir(root) / MANAGED_CRED_KEY_FILENAME
+
+
+def _read_managed_cred_key(root: Path | None = None) -> tuple[str, Path | None]:
+    path = managed_cred_key_path(root)
+    if path.exists():
+        key = path.read_text(encoding="utf-8").strip()
+        if key:
+            return key, path
+    return "", None
+
+
+def load_managed_cred_key(
+    environ: MutableMapping[str, str] | None = None,
+    *,
+    root: Path | None = None,
+) -> str:
+    target = environ if environ is not None else os.environ
+    raw_key = str(target.get("CGYY_CRED_KEY", "") or "").strip()
+    if raw_key:
+        return raw_key
+    key, _ = _read_managed_cred_key(root)
+    if key:
+        target["CGYY_CRED_KEY"] = key
+    return key
+
+
+def ensure_managed_cred_key(
+    environ: MutableMapping[str, str] | None = None,
+    *,
+    root: Path | None = None,
+) -> str:
+    target = environ if environ is not None else os.environ
+    key, source_path = _read_managed_cred_key(root)
+    if not key:
+        key = str(target.get("CGYY_CRED_KEY", "") or "").strip()
+    if not key:
+        key = secrets.token_urlsafe(32)
+
+    target["CGYY_CRED_KEY"] = key
+    target_path = managed_cred_key_path(root)
+    if source_path != target_path or not target_path.exists():
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        target_path.write_text(f"{key}\n", encoding="utf-8")
+        try:
+            os.chmod(target_path, 0o600)
+        except OSError:
+            pass
+    return key
+
+
+def infer_root_from_env_path(path: Path) -> Path:
+    resolved = path.resolve()
+    if resolved.parent.name == PROFILE_DIRNAME:
+        return resolved.parent.parent
+    return resolved.parent
+
+
 def profile_path(name: str | None, root: Path | None = None) -> Path:
     profile_name = normalize_profile_name(name)
     if profile_name == DEFAULT_PROFILE:
@@ -62,6 +123,7 @@ def build_env_store(
     environ: dict[str, str] | None = None,
 ) -> EnvStore:
     runtime_environ = environ if environ is not None else dict(os.environ)
+    load_managed_cred_key(runtime_environ, root=root)
     profile_name = normalize_profile_name(name, runtime_environ)
     return EnvStore(
         path=profile_path(profile_name, root),
@@ -169,6 +231,8 @@ class ProfileManager:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("", encoding="utf-8")
         if updates:
+            if any(key in SENSITIVE_ENV_KEYS and value for key, value in updates.items()):
+                ensure_managed_cred_key(self.environ, root=self.root)
             self._store(profile_name).set_values(updates)
         return path
 
@@ -185,6 +249,8 @@ class ProfileManager:
             raise ValueError(f"profile '{profile_name}' 不存在")
         store = self._store(profile_name)
         if updates:
+            if any(key in SENSITIVE_ENV_KEYS and value for key, value in updates.items()):
+                ensure_managed_cred_key(self.environ, root=self.root)
             store.set_values(updates)
         if unset_keys:
             store.unset_keys(unset_keys)

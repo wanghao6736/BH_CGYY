@@ -7,8 +7,7 @@ from src.config.profiles import ProfileSummary
 from src.core.payment_service import PaymentTargetResult
 from src.core.reservation_service import ReservationResult
 from src.core.workflow import FullReservationResult
-from src.parsers.cashier import (CashierTransactionParsed,
-                                 CashierUrlParsed)
+from src.parsers.cashier import CashierTransactionParsed, CashierUrlParsed
 from src.parsers.catalog import CatalogParsed, SiteItem
 from src.parsers.day_info import (Buddy, DayInfoParsed, OrderParamView,
                                   SiteParam, SlotState, SpaceSchedule,
@@ -267,7 +266,7 @@ def test_ui_facade_login_persists_auth_and_clears_legacy_sso_fields(tmp_path: Pa
         },
         [],
     )
-    assert (tmp_path / ".env.profiles" / ".gui_cred_key").exists()
+    assert (tmp_path / ".env.profiles" / ".cgyy_cred_key").exists()
 
 
 def test_ui_facade_login_session_only_clears_persisted_auth_fields() -> None:

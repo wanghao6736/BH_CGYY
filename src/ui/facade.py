@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import secrets
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -9,7 +8,9 @@ from typing import Callable
 
 from src.auth.manager import AuthManager
 from src.config.env_store import EnvStore
-from src.config.profiles import ProfileManager, build_env_store, profile_dir
+from src.config.profiles import (ProfileManager, build_env_store,
+                                 ensure_managed_cred_key,
+                                 load_managed_cred_key)
 from src.config.settings import AuthSettings, load_settings
 from src.core.catalog_service import CatalogService
 from src.core.workflow import ReservationQuery
@@ -69,9 +70,6 @@ class UiFacade:
         # 导致后续保存已落盘但界面仍优先命中旧内存值。
         return build_env_store(profile_name, root=self._root, environ=dict(self._environ))
 
-    def _managed_cred_key_path(self) -> Path:
-        return profile_dir(self._root) / ".gui_cred_key"
-
     def _set_runtime_env(self, key: str, value: str) -> None:
         if value:
             self._environ[key] = value
@@ -83,32 +81,12 @@ class UiFacade:
             self.profile_manager.environ.pop(key, None)
 
     def _load_managed_cred_key(self) -> None:
-        if self._environ.get("CGYY_CRED_KEY", "").strip():
-            return
-        path = self._managed_cred_key_path()
-        if not path.exists():
-            return
-        key = path.read_text(encoding="utf-8").strip()
+        key = load_managed_cred_key(self._environ, root=self._root)
         if key:
             self._set_runtime_env("CGYY_CRED_KEY", key)
 
     def _ensure_managed_cred_key(self) -> str:
-        raw_key = self._environ.get("CGYY_CRED_KEY", "").strip()
-        if raw_key:
-            return raw_key
-        path = self._managed_cred_key_path()
-        if path.exists():
-            key = path.read_text(encoding="utf-8").strip()
-            if key:
-                self._set_runtime_env("CGYY_CRED_KEY", key)
-                return key
-        key = secrets.token_urlsafe(32)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(f"{key}\n", encoding="utf-8")
-        try:
-            os.chmod(path, 0o600)
-        except OSError:
-            pass
+        key = ensure_managed_cred_key(self._environ, root=self._root)
         self._set_runtime_env("CGYY_CRED_KEY", key)
         return key
 

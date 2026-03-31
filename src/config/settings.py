@@ -3,12 +3,9 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Tuple
 
+from src.api.endpoints import CgyyEndpoints, SsoEndpoints
 from src.config.env_store import EnvStore
 from src.config.profiles import build_env_store, normalize_profile_name
-
-DEFAULT_SSO_LOGIN_URL = "https://sso.buaa.edu.cn/login"
-DEFAULT_SSO_SERVICE_URL = "https://cgyy.buaa.edu.cn/venue-server/sso/manageLogin"
-BUAA_CGYY_REFERER = "https://cgyy.buaa.edu.cn/"
 
 
 def _today_str() -> str:
@@ -17,10 +14,9 @@ def _today_str() -> str:
 
 @dataclass
 class ApiSettings:
-    base_url: str = ""
+    base_url: str = CgyyEndpoints.BASE_URL
     prefix: str = ""
     app_key: str = ""
-    # AES-CBC 加密所需 key/iv，通过环境变量设置
     aes_cbc_key: str = ""
     aes_cbc_iv: str = ""
     venue_site_id: int = 57
@@ -63,8 +59,8 @@ class AuthSettings:
 @dataclass
 class SsoSettings:
     enabled: bool = False
-    login_base_url: str = DEFAULT_SSO_LOGIN_URL
-    service_url: str = DEFAULT_SSO_SERVICE_URL
+    login_base_url: str = f"{SsoEndpoints.DOMAIN}{SsoEndpoints.LOGIN_ENTRY}"
+    service_url: str = f"{CgyyEndpoints.BASE_URL}{CgyyEndpoints.SSO_LOGIN}"
     username: str = ""
     password: str = ""
     max_redirects: int = 10

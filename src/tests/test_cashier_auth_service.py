@@ -2,9 +2,10 @@ from types import SimpleNamespace
 
 from requests.cookies import RequestsCookieJar
 
+from src.api.endpoints import CgyyEndpoints
 from src.auth.cashier_auth_service import CashierBootstrapService
 from src.auth.exceptions import CashierBootstrapError
-from src.config.settings import BUAA_CGYY_REFERER, SsoSettings
+from src.config.settings import SsoSettings
 from src.sso.models import PageResponse
 
 
@@ -83,7 +84,7 @@ def test_bootstrap_from_school_pay_url_follows_sso_redirects_automatically() -> 
         "https://cashier.cc-pay.cn/cashier?id=abc123&channel=BUAASSO"
     )
     assert result.cookie == "connect.sid=sid-1; user_id=user-1; avatar_dir=avatar-1"
-    assert page_client.calls[0][1]["Referer"] == BUAA_CGYY_REFERER
+    assert page_client.calls[0][1]["Referer"] == CgyyEndpoints.DOMAIN + "/"
 
 
 def test_bootstrap_raises_when_entry_has_no_location() -> None:
