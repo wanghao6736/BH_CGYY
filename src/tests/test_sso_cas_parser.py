@@ -61,3 +61,23 @@ def test_parse_login_page_ignores_hidden_captcha_label() -> None:
     parsed = parse_login_page(html, "https://sso.example/login")
     assert parsed.captcha_required is False
     assert parsed.captcha_challenge is None
+
+
+def test_parse_login_page_preserves_service_query_when_form_action_omits_it() -> None:
+    html = """
+    <html>
+      <body>
+        <form action="/login">
+          <input type="hidden" name="execution" value="e1s4" />
+          <input type="text" name="username" />
+          <input type="password" name="password" />
+        </form>
+      </body>
+    </html>
+    """
+    parsed = parse_login_page(
+        html,
+        "https://sso.example/login?service=https://pass.cc-pay.cn/login",
+    )
+
+    assert parsed.form_action == "https://sso.example/login?service=https://pass.cc-pay.cn/login"

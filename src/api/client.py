@@ -6,6 +6,7 @@ from typing import Any, Dict, Iterable, Optional
 
 from src.config.settings import ApiSettings, AuthSettings
 from src.http.base_client import BaseHttpClient
+from src.http.header_profiles import build_api_form_headers
 from src.utils.sign_utils import SignBuilder
 from src.utils.time_utils import current_timestamp_ms
 
@@ -19,15 +20,16 @@ class ApiClient(BaseHttpClient):
     sign_builder: SignBuilder
 
     def _base_headers(self, timestamp: int) -> Dict[str, str]:
-        return {
-            "accept": "application/json, text/plain, */*",
-            "user-agent": "Mozilla/5.0",
-            "content-type": "application/x-www-form-urlencoded",
+        headers = build_api_form_headers()
+        headers.update(
+            {
             "cookie": self.auth_settings.cookie,
             "cgAuthorization": self.auth_settings.cg_authorization,
             "app-key": self.api_settings.app_key,
             "timestamp": str(timestamp),
-        }
+            }
+        )
+        return headers
 
     def _build_sign(
         self, rel_path: str, parts: Iterable[str], timestamp: int

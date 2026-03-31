@@ -23,13 +23,16 @@ def parse_success_message(resp: Dict[str, Any]) -> Tuple[bool, str]:
     success = (
         resp.get("code") == 200
         or resp.get("repCode") == "0000"
+        or resp.get("success", False)
         or data.get("success", False)
         or data.get("repCode") == "0000"
     )
     msg = (
         resp.get("message")
+        or resp.get("msg")
         or resp.get("repMsg")
         or data.get("repMsg")
+        or data.get("msg")
         or data.get("message")
         or ""
     )

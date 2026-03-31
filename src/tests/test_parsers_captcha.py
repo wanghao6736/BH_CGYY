@@ -12,7 +12,7 @@ from src.parsers.captcha import (parse_captcha_data, parse_captcha_response,
 
 def _load_fixture(name: str) -> dict:
     root = Path(__file__).resolve().parents[2]
-    with (root / "docs" / name).open(encoding="utf-8") as f:
+    with (root / "docs/responses" / name).open(encoding="utf-8") as f:
         return json.load(f)
 
 

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
-import logging
-
-from src.notifier import (build_submit_notification_message, main,
-                          send_notification)
+from src.notifier import (build_payment_notification_message,
+                          build_submit_notification_message,
+                          describe_payment_target, main, send_notification)
 
 
 class _FakeResponse:
@@ -37,6 +37,7 @@ def test_send_notification_uses_profile_bark_settings(
     sent = send_notification(
         "CGYY 预约成功",
         "订单 D1",
+        url="weixin://wap/pay?prepayid=123",
         profile_name="alice",
         root=tmp_path,
         environ={},
@@ -54,7 +55,7 @@ def test_send_notification_uses_profile_bark_settings(
                 "sound": "birdsong",
                 "icon": "https://www.buaa.edu.cn/images/foot-bicon2.png",
                 "group": "CGYY",
-                "url": "https://cgyy.buaa.edu.cn/venue/orders",
+                "url": "weixin://wap/pay?prepayid=123",
             },
             5,
         )
@@ -123,3 +124,25 @@ def test_build_submit_notification_message_matches_cli_style() -> None:
     assert "📌 订单ID 100 | 编号 D100" in text
     assert "🕐 预约时间 2026-04-01 18:00 ~ 2026-04-01 19:00" in text
     assert "👤 预定人 Alice | profile alice" in text
+
+
+def test_build_payment_notification_message_appends_payment_target() -> None:
+    text = build_payment_notification_message(
+        success=True,
+        message="OK",
+        order_id=100,
+        trade_no="D100",
+        reservation_start_date="2026-04-01 18:00",
+        reservation_end_date="2026-04-01 19:00",
+        display_name="Alice",
+        profile_name="alice",
+        payment_target="weixin://wap/pay?prepayid=123",
+    )
+
+    assert "✅ [成功] 提交订单：OK" in text
+    assert "🎯 微信支付跳转 weixin://wap/pay?prepayid=123" in text
+
+
+def test_describe_payment_target_distinguishes_scheme_and_url() -> None:
+    assert describe_payment_target("weixin://wap/pay?prepayid=123") == "微信支付跳转"
+    assert describe_payment_target("https://cashier.cc-pay.cn/cashier?id=abc123") == "支付页面"

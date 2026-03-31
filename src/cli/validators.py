@@ -75,6 +75,9 @@ def validate_and_normalize_args(args: Namespace) -> Namespace:
     if getattr(args, "strategy", None):
         args.strategy = str(args.strategy).strip()
 
+    if getattr(args, "pay_way_name", None):
+        args.pay_way_name = str(args.pay_way_name).strip()
+
     if getattr(args, "set_values", None):
         normalized_items: list[str] = []
         for item in args.set_values:

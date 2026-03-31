@@ -11,3 +11,7 @@ class AuthProbeError(AuthError):
 
 class AuthUnavailableError(AuthError):
     """缺少可用的认证信息。"""
+
+
+class CashierBootstrapError(AuthError):
+    """cashier 会话初始化失败。"""

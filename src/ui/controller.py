@@ -137,12 +137,14 @@ class UiController(QObject):
         title: str,
         message: str,
         *,
+        url: str = "",
         profile_name: str | None = None,
     ) -> None:
         self._runner.submit_background(
             lambda: send_notification(
                 title,
                 message,
+                url=url,
                 profile_name=profile_name,
             ),
             label="notification",

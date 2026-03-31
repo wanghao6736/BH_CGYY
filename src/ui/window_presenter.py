@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from src.notifier import build_submit_notification_message
+from src.notifier import build_payment_notification_message, describe_payment_target
 from src.ui.state import (BoardState, BookingFormState, PollingState,
                           PollingStatus, ReserveOutcome, SelectionState,
                           SessionState, SessionStatus, SettingsFormState,
@@ -246,11 +246,15 @@ class WindowPresenter:
         status_message = message
         if result.trade_no:
             status_message = f"{message} / {result.trade_no}"
+        if result.payment_target:
+            status_message = f"{status_message} / {describe_payment_target(result.payment_target)}已生成"
+        elif result.payment_message:
+            status_message = f"{status_message} / 支付待处理"
         self._show_status_message(status_message, 5000)
         if result.success:
             window.controller.request_notification(
                 "CGYY 预约成功",
-                build_submit_notification_message(
+                build_payment_notification_message(
                     success=result.success,
                     message=message,
                     order_id=result.order_id,
@@ -259,7 +263,10 @@ class WindowPresenter:
                     reservation_end_date=result.reservation_end_date,
                     display_name=result.display_name,
                     profile_name=result.profile_name,
+                    payment_target=result.payment_target,
+                    payment_message=result.payment_message,
                 ),
+                url=result.payment_target,
                 profile_name=result.profile_name or None,
             )
 

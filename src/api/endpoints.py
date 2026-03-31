@@ -15,3 +15,10 @@ class CgyyEndpoints:
 
     ORDER_DETAIL = "/api/venue/finances/order/detail"
     ORDER_CANCEL = "/api/venue/finances/order/cancel"
+    ORDER_PAY = "/api/venue/finances/order/pay"
+
+
+class CashierEndpoints:
+    TRANSACTION = "/transaction"
+    PAY_WAYS = "/api/pay_ways"
+    TRANSACTION_PAY = "/transaction/pay"

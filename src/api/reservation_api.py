@@ -60,3 +60,12 @@ class ReservationApi:
         }
         sign_parts = params_to_sign_parts(params)
         return self.client.post(CgyyEndpoints.ORDER_CANCEL, data=params, sign_parts=sign_parts)
+
+    def create_order_payment(self, venue_trade_no: str, pay_type: int = 13, is_app: int = 0) -> Dict[str, Any]:
+        data = {
+            "payType": pay_type,
+            "venueTradeNo": venue_trade_no,
+            "isApp": is_app,
+        }
+        sign_parts = params_to_sign_parts(data)
+        return self.client.post(CgyyEndpoints.ORDER_PAY, data=data, sign_parts=sign_parts)

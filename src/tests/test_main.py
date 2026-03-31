@@ -1,14 +1,14 @@
+from argparse import Namespace
 from pathlib import Path
 
 import pytest
 
-from src.config.env_store import EnvStore
-from argparse import Namespace
-
 from src.cli.commands import run as run_command
+from src.cli.handlers.registry import get_command_kind
+from src.config.env_store import EnvStore
 from src.config.settings import ApiSettings, UserSettings
-from src.main import (build_command_context, classify_command, main,
-                      merge_cli_overrides, parse_cli_args)
+from src.main import (build_command_context, main, merge_cli_overrides,
+                      parse_cli_args)
 
 
 def test_merge_cli_overrides_ignores_missing_business_args_for_profile_command() -> None:
@@ -43,7 +43,7 @@ def test_main_logout_clears_encrypted_auth_without_cred_key(
         def parse_args(self) -> Namespace:
             return Namespace(cmd="logout", profile="default")
 
-    monkeypatch.setattr("src.main._setup_logging", lambda: None)
+    monkeypatch.setattr("src.main.setup_logging", lambda: None)
     monkeypatch.setattr("src.main.build_parser", lambda: Parser())
     monkeypatch.setattr("src.main.validate_and_normalize_args", lambda args: args)
     monkeypatch.setattr("src.main.build_env_store", lambda *args, **kwargs: logout_store)
@@ -85,7 +85,7 @@ def test_main_profile_modify_skips_settings_load_for_encrypted_default_profile(
                 force=False,
             )
 
-    monkeypatch.setattr("src.main._setup_logging", lambda: None)
+    monkeypatch.setattr("src.main.setup_logging", lambda: None)
     monkeypatch.setattr("src.main.build_parser", lambda: Parser())
     monkeypatch.setattr("src.main.validate_and_normalize_args", lambda args: args)
     monkeypatch.setattr("src.main.build_env_store", lambda *args, **kwargs: runtime_store)
@@ -102,13 +102,14 @@ def test_main_profile_modify_skips_settings_load_for_encrypted_default_profile(
     assert "CGYY_DISPLAY_NAME=Alice\n" in profile_env.read_text(encoding="utf-8")
 
 
-def test_classify_command_splits_execution_paths() -> None:
-    assert classify_command("logout") == "settings_free"
-    assert classify_command("profile") == "settings_free"
-    assert classify_command("login") == "settings_only"
-    assert classify_command("auth-status") == "settings_only"
-    assert classify_command("config-doctor") == "settings_only"
-    assert classify_command("reserve") == "full"
+def test_get_command_kind_splits_execution_paths() -> None:
+    assert get_command_kind("logout") == "settings_free"
+    assert get_command_kind("profile") == "settings_free"
+    assert get_command_kind("login") == "settings_only"
+    assert get_command_kind("auth-status") == "settings_only"
+    assert get_command_kind("config-doctor") == "settings_only"
+    assert get_command_kind("pay") == "full"
+    assert get_command_kind("reserve") == "full"
 
 
 def test_parse_cli_args_uses_real_parser_and_validator() -> None:
@@ -133,18 +134,66 @@ def test_parse_cli_args_uses_real_parser_and_validator() -> None:
     assert args.duration == 2
 
 
+def test_parse_cli_args_normalizes_pay_options() -> None:
+    args = parse_cli_args(
+        [
+            "pay",
+            "-P",
+            "Default",
+            "-t",
+            "D260331000575",
+            "--mode",
+            "mobile",
+            "--pay-way-name",
+            " wxpay_wap ",
+        ]
+    )
+
+    assert args.cmd == "pay"
+    assert args.profile == "Default"
+    assert args.trade_no == "D260331000575"
+    assert args.mode == "mobile"
+    assert args.pay_way_name == "wxpay_wap"
+
+
+def test_build_app_includes_payment_service() -> None:
+    from src.config.settings import AuthSettings, SsoSettings
+
+    services = __import__("src.main", fromlist=["build_app"]).build_app(
+        api_settings=ApiSettings(
+            base_url="https://cgyy.example.invalid",
+            prefix="prefix",
+            app_key="app-key",
+            aes_cbc_key="0123456789abcdef",
+            aes_cbc_iv="0123456789abcdef",
+            retry_count=2,
+            retry_interval_sec=0.1,
+        ),
+        user_settings=UserSettings(),
+        auth_settings=AuthSettings(cookie="cookie=1", cg_authorization="auth-1"),
+        sso_settings=SsoSettings(timeout_sec=9.0),
+        ensure_auth=False,
+    )
+
+    assert services.workflow is not None
+    assert services.catalog_service is not None
+    assert services.payment_service is not None
+
+
 def test_main_logout_does_not_load_settings_or_build_services(monkeypatch: pytest.MonkeyPatch) -> None:
     class Parser:
         def parse_args(self) -> Namespace:
             return Namespace(cmd="logout", profile="default")
 
-    monkeypatch.setattr("src.main._setup_logging", lambda: None)
+    monkeypatch.setattr("src.main.setup_logging", lambda: None)
     monkeypatch.setattr("src.main.build_parser", lambda: Parser())
     monkeypatch.setattr("src.main.validate_and_normalize_args", lambda args: args)
     monkeypatch.setattr("src.main.build_env_store", lambda *args, **kwargs: object())
     monkeypatch.setattr("src.main.ProfileManager", lambda *args, **kwargs: object())
-    monkeypatch.setattr("src.main.load_settings", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("load_settings should not run")))
-    monkeypatch.setattr("src.main.build_app", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("build_app should not run")))
+    monkeypatch.setattr("src.main.load_settings", lambda *args, **kwargs: (_ for _ in ()
+                                                                           ).throw(AssertionError("load_settings should not run")))
+    monkeypatch.setattr("src.main.build_app", lambda *args, **kwargs: (_ for _ in ()
+                                                                       ).throw(AssertionError("build_app should not run")))
     monkeypatch.setattr("src.main.AuthManager", lambda *args, **kwargs: object())
     monkeypatch.setattr("src.main.run_command", lambda context, args: None)
 
@@ -156,10 +205,12 @@ def test_build_command_context_for_login_skips_service_build(
 ) -> None:
     args = Namespace(cmd="login", profile="default")
 
-    monkeypatch.setattr("src.main.load_settings", lambda *args, **kwargs: (ApiSettings(), UserSettings(), object(), object()))
+    monkeypatch.setattr("src.main.load_settings", lambda *args, **
+                        kwargs: (ApiSettings(), UserSettings(), object(), object()))
     monkeypatch.setattr("src.main.AuthManager", lambda *args, **kwargs: "auth-manager")
     monkeypatch.setattr("src.main.ProfileManager", lambda *args, **kwargs: "profile-manager")
-    monkeypatch.setattr("src.main.build_app", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("build_app should not run")))
+    monkeypatch.setattr("src.main.build_app", lambda *args, **kwargs: (_ for _ in ()
+                                                                       ).throw(AssertionError("build_app should not run")))
     monkeypatch.setattr("src.main.build_env_store", lambda *args, **kwargs: "env-store")
 
     context = build_command_context(args, environ={})
@@ -191,10 +242,12 @@ def test_build_command_context_for_config_doctor_skips_service_build(
 ) -> None:
     args = Namespace(cmd="config-doctor", profile="default", probe=False)
 
-    monkeypatch.setattr("src.main.load_settings", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("load_settings should not run")))
+    monkeypatch.setattr("src.main.load_settings", lambda *args, **kwargs: (_ for _ in ()
+                                                                           ).throw(AssertionError("load_settings should not run")))
     monkeypatch.setattr("src.main.AuthManager", lambda *args, **kwargs: "auth-manager")
     monkeypatch.setattr("src.main.ProfileManager", lambda *args, **kwargs: "profile-manager")
-    monkeypatch.setattr("src.main.build_app", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("build_app should not run")))
+    monkeypatch.setattr("src.main.build_app", lambda *args, **kwargs: (_ for _ in ()
+                                                                       ).throw(AssertionError("build_app should not run")))
     monkeypatch.setattr("src.main.build_env_store", lambda *args, **kwargs: "env-store")
 
     context = build_command_context(args, environ={})
@@ -208,7 +261,7 @@ def test_build_command_context_for_config_doctor_skips_service_build(
 def test_main_smoke_uses_real_parser_and_dispatches_profile_list(monkeypatch: pytest.MonkeyPatch) -> None:
     captured = []
 
-    monkeypatch.setattr("src.main._setup_logging", lambda: None)
+    monkeypatch.setattr("src.main.setup_logging", lambda: None)
     monkeypatch.setattr("src.main.AuthManager", lambda *args, **kwargs: "auth-manager")
     monkeypatch.setattr("src.main.ProfileManager", lambda *args, **kwargs: "profile-manager")
     monkeypatch.setattr("src.main.build_env_store", lambda *args, **kwargs: "env-store")
@@ -269,7 +322,7 @@ def test_main_config_doctor_smoke_uses_real_parser_and_handler(
         encoding="utf-8",
     )
 
-    monkeypatch.setattr("src.main._setup_logging", lambda: None)
+    monkeypatch.setattr("src.main.setup_logging", lambda: None)
     monkeypatch.setattr(
         "src.main.build_env_store",
         lambda name, environ=None: __import__("src.config.profiles", fromlist=["build_env_store"]).build_env_store(
@@ -301,7 +354,7 @@ def test_main_config_doctor_reports_bad_settings_instead_of_crashing(
     default_env = tmp_path / ".env"
     default_env.write_text("CGYY_VENUE_SITE_ID=abc\n", encoding="utf-8")
 
-    monkeypatch.setattr("src.main._setup_logging", lambda: None)
+    monkeypatch.setattr("src.main.setup_logging", lambda: None)
     monkeypatch.setattr(
         "src.main.build_env_store",
         lambda name, environ=None: __import__("src.config.profiles", fromlist=["build_env_store"]).build_env_store(

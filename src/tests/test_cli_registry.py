@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from argparse import _SubParsersAction
 
-from src.cli.handlers.registry import (get_command_kind, get_registered_commands,
+from src.cli.handlers.registry import (get_command_kind,
+                                       get_registered_commands,
                                        requires_trade_no)
 from src.cli.parser import build_parser
 
@@ -25,6 +26,7 @@ def test_command_registry_exposes_expected_command_kinds() -> None:
     assert get_command_kind("login") == "settings_only"
     assert get_command_kind("auth-status") == "settings_only"
     assert get_command_kind("config-doctor") == "settings_only"
+    assert get_command_kind("pay") == "full"
     assert get_command_kind("reserve") == "full"
     assert get_command_kind("unknown-command") == "full"
 
@@ -32,4 +34,5 @@ def test_command_registry_exposes_expected_command_kinds() -> None:
 def test_command_registry_marks_trade_no_commands() -> None:
     assert requires_trade_no("order-detail") is True
     assert requires_trade_no("cancel-order") is True
+    assert requires_trade_no("pay") is True
     assert requires_trade_no("config-doctor") is False

@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from argparse import Namespace
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Literal
 
 from src.cli.context import CommandContext
 from src.cli.handlers.auth import (handle_auth_status, handle_login,
                                    handle_logout)
 from src.cli.handlers.doctor import handle_config_doctor
+from src.cli.handlers.payment import handle_pay
 from src.cli.handlers.profile import handle_profile
 from src.cli.handlers.query import (handle_cancel_order, handle_catalog,
                                     handle_fetch_captcha, handle_info,
@@ -36,6 +37,7 @@ COMMAND_SPECS: dict[str, CommandSpec] = {
     "login": CommandSpec(handle_login, kind="settings_only"),
     "logout": CommandSpec(handle_logout, kind="settings_free"),
     "order-detail": CommandSpec(handle_order_detail, requires_trade_no=True),
+    "pay": CommandSpec(handle_pay, requires_trade_no=True),
     "profile": CommandSpec(handle_profile, kind="settings_free"),
     "reserve": CommandSpec(handle_reserve),
     "verify-captcha": CommandSpec(handle_verify_captcha),

@@ -7,6 +7,7 @@ from typing import List, Optional
 
 from tabulate import tabulate
 
+from src.core.payment_service import PaymentTargetResult
 from src.parsers.catalog import SiteItem, SportItem
 from src.parsers.day_info import Buddy, SiteParam
 from src.parsers.order import OrderDetailParsed, SubmitParsed
@@ -142,3 +143,29 @@ def format_catalog_sites_table(sites: List[SiteItem], venue_site_id: Optional[in
     table = tabulate(rows, headers=["siteId", "校区", "场馆", "项目"], tablefmt="simple", stralign="left")
     tip = "💡 siteId 即预约接口使用的 venueSiteId（可写入 default 或当前 profile 的 CGYY_VENUE_SITE_ID）。"
     return "🏟️ 场地列表\n" + table + "\n" + tip
+
+
+def format_payment_result(
+    result: PaymentTargetResult,
+    *,
+    display_name: str = "",
+    profile_name: str = "",
+) -> str:
+    if result.mode == "desktop":
+        lines = [
+            "💳 支付模式 desktop",
+            f"🔗 schoolPayUrl {result.resolved_target}",
+        ]
+    else:
+        lines = [f"💳 支付模式 mobile | 支付方式 {result.pay_way_name or '-'}"]
+        if result.cashier and result.transaction:
+            lines.append(
+                f"🆔 cashierId {result.cashier.cashier_id} | goodsId {result.transaction.goods_id}"
+            )
+            lines.append(
+                f"📍 订单 {result.transaction.subject or '-'} | 金额 ¥{result.transaction.money}"
+            )
+        lines.append(f"🎯 微信跳转 {result.resolved_target}")
+    if display_name or profile_name:
+        lines.append(f"👤 当前身份 {display_name or profile_name} | profile {profile_name or '-'}")
+    return "\n".join(lines)

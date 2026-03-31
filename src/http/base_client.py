@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 
 import requests
 
@@ -21,6 +21,10 @@ class BaseHttpClient:
         if self.session is None:
             self.session = requests.Session()
         return self.session
+
+    @property
+    def _headers(self) -> Dict[str, str]:
+        return self._session.headers
 
     def _request_with_retry(
         self,

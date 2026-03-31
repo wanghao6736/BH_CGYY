@@ -15,3 +15,7 @@ class CaptchaError(CgyyError):
 
 class BuddyConfigError(CgyyError):
     """同伴配置不满足场地要求。"""
+
+
+class PaymentError(CgyyError):
+    """订单支付初始化或 cashier 解析失败。"""
