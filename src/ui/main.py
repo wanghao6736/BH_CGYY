@@ -2,16 +2,34 @@ from __future__ import annotations
 
 import os
 import sys
+import traceback
 
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
 from src.logging_setup import setup_logging
+from src.runtime_paths import project_root
 from src.ui.controller import UiController
 from src.ui.facade import UiFacade
+from src.ui.resources import app_icon_path
 from src.ui.state import SessionStatus
 from src.ui.styles import load_stylesheet
-from src.ui.window import MainWindow
 from src.ui.widgets.login_panel import LoginWindow
+from src.ui.window import MainWindow
+
+
+def _write_startup_crash(traceback_text: str) -> None:
+    try:
+        log_dir = project_root() / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        crash_log = log_dir / "ui-startup-crash.log"
+        with crash_log.open("a", encoding="utf-8") as handle:
+            handle.write(traceback_text)
+            if not traceback_text.endswith("\n"):
+                handle.write("\n")
+            handle.write("\n")
+    except OSError:
+        pass
 
 
 class AppCoordinator:
@@ -64,12 +82,23 @@ class AppCoordinator:
 
 
 def main() -> None:
-    os.environ.setdefault("QT_QPA_PLATFORM", os.environ.get("QT_QPA_PLATFORM", "cocoa"))
-    setup_logging()
-    app = QApplication(sys.argv)
-    app.setApplicationName("CGYY Workbench")
-    app.setStyleSheet(load_stylesheet())
-    facade = UiFacade()
-    coordinator = AppCoordinator(facade)
-    coordinator.start()
-    sys.exit(app.exec())
+    try:
+        os.environ.setdefault("QT_QPA_PLATFORM", os.environ.get("QT_QPA_PLATFORM", "cocoa"))
+        setup_logging()
+        app = QApplication(sys.argv)
+        app.setApplicationName("CGYY Workbench")
+        icon_path = app_icon_path()
+        if icon_path.exists():
+            app.setWindowIcon(QIcon(str(icon_path)))
+        app.setStyleSheet(load_stylesheet())
+        facade = UiFacade()
+        coordinator = AppCoordinator(facade)
+        coordinator.start()
+        sys.exit(app.exec())
+    except BaseException:
+        _write_startup_crash(traceback.format_exc())
+        raise
+
+
+if __name__ == "__main__":
+    main()
