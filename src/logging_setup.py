@@ -3,12 +3,14 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from src.runtime_paths import project_root
+
 LOG_FORMAT = "%(asctime)s [%(levelname)s] %(message)s"
 LOG_DATE_FORMAT = "%H:%M:%S"
 
 
 def _project_log_path() -> Path:
-    log_dir = Path(__file__).resolve().parents[1] / "logs"
+    log_dir = project_root() / "logs"
     log_dir.mkdir(exist_ok=True)
     return log_dir / "cgyy.log"
 

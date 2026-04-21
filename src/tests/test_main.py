@@ -10,6 +10,7 @@ from src.config.profiles import build_env_store, managed_cred_key_path
 from src.config.settings import ApiSettings, UserSettings
 from src.main import (build_command_context, main, merge_cli_overrides,
                       parse_cli_args)
+from src.main_lite import main as main_lite
 
 
 def test_merge_cli_overrides_ignores_missing_business_args_for_profile_command() -> None:
@@ -312,6 +313,46 @@ def test_main_smoke_uses_real_parser_and_dispatches_profile_list(monkeypatch: py
     assert context.active_profile == "default"
     assert context.auth_manager == "auth-manager"
     assert context.profile_manager == "profile-manager"
+
+
+def test_main_lite_rejects_ocr_bound_commands(monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    monkeypatch.setattr("src.main_lite.setup_logging", lambda: None)
+    monkeypatch.setattr("src.main_lite.parse_cli_args", lambda argv=None: Namespace(cmd="reserve", trade_no=None))
+    monkeypatch.setattr("src.main_lite.build_command_context", 
+        lambda *args, **kwargs: (
+            _ for _ in ()
+        ).throw(AssertionError("build_command_context should not run"))
+    )
+    monkeypatch.setattr("src.main_lite.run_command", 
+        lambda *args, **kwargs: (
+            _ for _ in ()
+        ).throw(AssertionError("run_command should not run"))
+    )
+
+    main_lite([])
+
+    out = capsys.readouterr().out
+    assert "命令不可用" in out
+    assert "reserve" in out
+
+
+def test_main_lite_dispatches_supported_commands(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured = []
+
+    monkeypatch.setattr("src.main_lite.setup_logging", lambda: None)
+    monkeypatch.setattr(
+        "src.main_lite.parse_cli_args",
+        lambda argv=None: Namespace(cmd="profile", profile_cmd="list", trade_no=None),
+    )
+    monkeypatch.setattr("src.main_lite.build_command_context", lambda args: "context")
+    monkeypatch.setattr(
+        "src.main_lite.run_command",
+        lambda context, args: captured.append((context, args.cmd, args.profile_cmd)),
+    )
+
+    main_lite([])
+
+    assert captured == [("context", "profile", "list")]
 
 
 def test_run_command_dispatches_via_registry_defaulting_to_reserve(monkeypatch: pytest.MonkeyPatch) -> None:

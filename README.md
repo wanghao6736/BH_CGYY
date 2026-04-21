@@ -20,7 +20,7 @@ generation, notifications, and optional desktop UI support.
 
 ## Installation
 
-Install the CLI and core runtime:
+Install the smallest CLI runtime:
 
 ```bash
 pip install -e .
@@ -32,19 +32,33 @@ Or:
 pip install .
 ```
 
-Install the optional desktop UI:
+Install the OCR-enabled CLI:
 
 ```bash
-pip install -e ".[ui]"
+pip install -e ".[ocr]"
 ```
 
 Or:
 
 ```bash
-pip install ".[ui]"
+pip install ".[ocr]"
 ```
 
-`PySide6` is only included by the `ui` extra. Base installation keeps the CLI available by default.
+Install the optional desktop UI:
+
+```bash
+pip install -e ".[ocr,ui]"
+```
+
+Or:
+
+```bash
+pip install ".[ocr,ui]"
+```
+
+`ddddocr` / `opencv-python-headless` / `Pillow` are only included by the `ocr`
+extra. `PySide6` is only included by the `ui` extra. Base installation keeps a
+lighter CLI available by default.
 
 ## Usage
 
@@ -85,6 +99,35 @@ Or:
 ```bash
 cgyy-ui
 ```
+
+## Packaging
+
+This repository includes `uv + Nuitka` build scripts with three targets:
+
+- `scripts/build_cli_lite.sh`: smallest CLI, excludes OCR and UI dependent commands
+- `scripts/build_cli_full.sh`: full CLI, includes reservation and captcha flows
+- `scripts/build_ui_app.sh`: macOS desktop app bundle
+
+Recommended build order:
+
+```bash
+./scripts/build_cli_lite.sh
+./scripts/build_cli_full.sh
+./scripts/build_ui_app.sh
+```
+
+Both CLI scripts default to `onefile` for minimum artifact size. If a build needs
+easier troubleshooting first, switch temporarily to standalone mode:
+
+```bash
+CGYY_NUITKA_MODE=standalone ./scripts/build_cli_full.sh
+```
+
+Runtime config discovery for packaged binaries:
+
+- Default source run: project root
+- Compiled binary: executable directory, or the directory containing the `.app` bundle on macOS
+- Override: set `CGYY_ROOT=/path/to/config-root`
 
 Additional local operator notes may be kept under `docs/` when needed.
 

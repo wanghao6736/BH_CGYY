@@ -7,19 +7,26 @@
 import json
 from pathlib import Path
 
-try:
-    import cv2
-    import ddddocr
-    import numpy as np
-    from PIL import Image, ImageDraw
-except ImportError as e:
-    raise ImportError(f"❌ CharLocator 缺少依赖：{e}")
+
+def _load_ocr_deps():
+    try:
+        import cv2
+        import ddddocr
+        import numpy as np
+        from PIL import Image, ImageDraw
+    except ImportError as e:
+        raise ImportError(
+            "❌ CharLocator 缺少 OCR 依赖，请安装 `.[ocr]` 或使用完整打包版本"
+        ) from e
+
+    return cv2, ddddocr, np, Image, ImageDraw
 
 
 class CharLocator:
     """文字定位器"""
 
     def __init__(self, show_ad=False):
+        _, ddddocr, _, _, _ = _load_ocr_deps()
         self.det = ddddocr.DdddOcr(det=True, ocr=False, show_ad=show_ad)
         self.ocr = ddddocr.DdddOcr(show_ad=show_ad, beta=True)
 
@@ -36,6 +43,8 @@ class CharLocator:
         Returns:
             定位结果
         """
+        cv2, _, np, _, _ = _load_ocr_deps()
+
         # 加载图片
         if image_path:
             with open(image_path, 'rb') as f:
@@ -145,6 +154,8 @@ def draw_boxes_with_chars(image_path: str, regions: list, target_bbox: list = No
     Returns:
         输出图片路径
     """
+    _, _, _, Image, ImageDraw = _load_ocr_deps()
+
     if not output_path:
         base = Path(image_path)
         output_path = str(base.parent / f"{base.stem}_located{base.suffix}")

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Mapping, MutableMapping
 
 from src.config.env_store import ENC_PREFIX, SENSITIVE_ENV_KEYS, EnvStore
+from src.runtime_paths import project_root
 
 DEFAULT_PROFILE = "default"
 PROFILE_DIRNAME = ".env.profiles"
@@ -16,10 +17,6 @@ DISPLAY_NAME_ENV_VAR = "CGYY_DISPLAY_NAME"
 MANAGED_CRED_KEY_FILENAME = ".cgyy_cred_key"
 
 PROFILE_NAME_RE = re.compile(r"^[A-Za-z0-9_-]+$")
-
-
-def project_root() -> Path:
-    return Path(__file__).resolve().parents[2]
 
 
 def normalize_profile_name(name: str | None, environ: Mapping[str, str] | None = None) -> str:

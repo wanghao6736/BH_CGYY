@@ -10,6 +10,8 @@ from typing import Mapping, MutableMapping
 from Crypto.Cipher import AES
 from Crypto.Random import get_random_bytes
 
+from src.runtime_paths import project_root
+
 logger = logging.getLogger(__name__)
 
 ENC_PREFIX = "enc:v1:"
@@ -30,7 +32,7 @@ class EnvStore:
         environ: MutableMapping[str, str] | None = None,
     ) -> None:
         if path is None:
-            path = Path(__file__).resolve().parents[2] / ".env"
+            path = project_root() / ".env"
         self.path = path
         self.paths = list(paths) if paths is not None else [path]
         self.environ = environ if environ is not None else dict(os.environ)

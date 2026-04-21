@@ -11,20 +11,29 @@ requires-python = ">=3.9"
 dependencies = [
     "requests>=2.28.0",
     "pycryptodome>=3.15.0",
-    "ddddocr>=1.4.0",
-    "opencv-python-headless>=4.5.0",
-    "Pillow>=9.0.0",
     "tabulate>=0.9.0",
 ]
 
 [project.optional-dependencies]
+ocr = [
+    "ddddocr>=1.4.0",
+    "opencv-python-headless>=4.5.0",
+    "Pillow>=9.0.0",
+]
 ui = [
     "PySide6>=6.6.0",
 ]
 
 [project.scripts]
 cgyy = "src.main:main"
+cgyy-lite = "src.main_lite:main"
 cgyy-ui = "src.ui.main:main"
+
+[dependency-groups]
+build = [
+    "Nuitka[app]",
+    "zstandard>=0.23.0",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]
@@ -32,3 +41,4 @@ include = ["src*"]
 
 [tool.setuptools.package-data]
 "src.ui.styles" = ["*.qss"]
+"src.ui.resources" = ["*.png", "*.icns", "*.ico"]

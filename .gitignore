@@ -17,4 +17,8 @@ src/legacy/**
 CAPTCHA/**
 logs/**
 output/**
+dist/**
+*.build/**
+*.dist/**
+*.onefile-build/**
 docs/**
