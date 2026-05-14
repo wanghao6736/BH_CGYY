@@ -29,7 +29,8 @@ def format_site_line(site_param: Optional[SiteParam]) -> str:
     """格式化为一行场地信息，如：📍 校区-场馆-项目。"""
     if not site_param:
         return ""
-    return f"📍 {site_param.campus_name}{site_param.venue_name}-{site_param.site_name}"
+    need_buddy = f"👤 {"需要" if site_param.buddy_num_min > 0 else "无需"}同伴"
+    return f"📍 {site_param.campus_name}{site_param.venue_name}-{site_param.site_name} | {need_buddy}"
 
 
 def format_request_result(name: str, success: bool, message: str = "") -> str:
@@ -66,12 +67,11 @@ def format_solutions_table(
                 f"¥{sol.total_fee}" if j == 0 else "",
                 f"{sol.slot_count}段/{sol.total_hours:.1f}h" if j == 0 else "",
             ])
-    headers = ["📋 方案", "场地", "🕐 时段", "单价", "💰 总价", "时长"]
+    headers = ["📋 方案", "🏟️ 场地", "🔢 时段", "💲 单价", "💰 总价", "⏱️ 时长"]
     table = tabulate(rows, headers=headers, tablefmt="simple", stralign="left")
     lines.append(table)
     lines.append(f"📊 共 {len(solutions)} 个方案 | 💡 默认将使用第 1 个方案下单。")
     return "\n".join(lines)
-
 
 def format_submit_result(
     success: bool,
