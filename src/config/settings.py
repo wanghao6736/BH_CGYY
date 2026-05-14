@@ -20,7 +20,7 @@ class ApiSettings:
     aes_cbc_key: str = ""
     aes_cbc_iv: str = ""
     venue_site_id: int = 57
-    default_search_date: str = ""  # 使用当天，接口支持三天内含当天
+    default_search_date: str = _today_str()  # 使用当天，接口支持三天内含当天
     # 验证码获取与校验之间的延迟区间（秒）
     captcha_delay_min: float = 1.0
     captcha_delay_max: float = 2.5
@@ -38,7 +38,7 @@ class UserSettings:
     reservation_date: str = ""
     reservation_order_json: str = ""
     reservation_type: str = ""
-    week_start_date: str = ""
+    week_start_date: str = _today_str()
     # orderPin 随机范围
     order_pin_x_min: int = 1000
     order_pin_x_max: int = 1150
@@ -94,7 +94,7 @@ def load_settings(
             "CGYY_RESERVATION_ORDER_JSON", UserSettings.reservation_order_json
         ),
         reservation_type=env.get_str("CGYY_RESERVATION_TYPE", UserSettings.reservation_type),
-        week_start_date=api.default_search_date or _today_str(),
+        week_start_date=api.default_search_date,
         reservation_start_time=env.get_str("CGYY_RESERVATION_START_TIME", UserSettings.reservation_start_time),
         reservation_slot_count=env.get_int(
             "CGYY_RESERVATION_SLOT_COUNT", UserSettings.reservation_slot_count),

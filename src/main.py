@@ -54,8 +54,6 @@ def merge_cli_overrides(
 
     if getattr(args, "duration", None) is not None:
         user_settings.reservation_slot_count = args.duration
-    elif cmd in ("info", "reserve"):
-        user_settings.reservation_slot_count = 1
 
     if getattr(args, "venue_site_id", None) is not None and args.venue_site_id != -1:
         api_settings.venue_site_id = args.venue_site_id

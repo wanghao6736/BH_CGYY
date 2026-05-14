@@ -73,6 +73,65 @@ def _send_ios_notification(title: str, message: str, *, store, url: str = "") ->
     return True
 
 
+def _send_windows_notification(title: str, message: str) -> bool:
+    if sys.platform != "win32":
+        return False
+    try:
+        subprocess.run(
+            [
+                "powershell",
+                "-NoProfile",
+                "-Command",
+                (
+                    "[console]::beep(1200,200);"
+                    "[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications,"
+                    " ContentType = WindowsRuntime] > $null;"
+                    "$t = [Windows.UI.Notifications.ToastNotificationManager]::"
+                    "GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02);"
+                    "$t.SelectSingleNode('//text[@id=\"1\"]')"
+                    ".AppendChild($t.CreateTextNode('%s')) > $null;"
+                    "$t.SelectSingleNode('//text[@id=\"2\"]')"
+                    ".AppendChild($t.CreateTextNode('%s')) > $null;"
+                    "$n = [Windows.UI.Notifications.ToastNotification]::new($t);"
+                    "[Windows.UI.Notifications.ToastNotificationManager]::"
+                    "CreateToastNotifier('CGYY').Show($n);"
+                )
+                % (title, message),
+            ],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError) as exc:
+        logger.warning("Windows 通知发送失败: %s", exc)
+        return False
+    return True
+
+
+def _send_android_notification(title: str, message: str, *, store, url: str = "") -> bool:
+    topic = store.get_str("CGYY_NTFY_TOPIC", "").strip()
+    if not topic:
+        return False
+    ntfy_base = store.get_str("CGYY_NTFY_URL", "https://ntfy.sh").strip().rstrip("/")
+    ntfy_url = f"{ntfy_base}/{topic}"
+    normalized_url = _normalize_text(url)
+    headers = {
+        "Title": title,
+        "Icon": _BARK_ICON,
+        "priority": "5",
+        "Tags": "white_check_mark",
+    }
+    if normalized_url:
+        headers["Click"] = normalized_url
+    try:
+        response = requests.post(ntfy_url, data=message, headers=headers, timeout=5)
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        logger.warning("Android 通知发送失败: %s", exc)
+        return False
+    return True
+
+
 def _send_macos_notification(title: str, message: str) -> bool:
     if sys.platform != "darwin":
         return False
@@ -113,14 +172,33 @@ def send_notification(
 ) -> list[str]:
     normalized_title = _normalize_text(title, fallback=_DEFAULT_TITLE)
     normalized_message = _normalize_text(message)
-    enabled_channels = tuple(channels or ("macos", "ios"))
     store = _load_store(profile_name, root=root, environ=environ)
+
+    if channels is not None:
+        enabled_channels = tuple(channels)
+    else:
+        raw = store.get_str("CGYY_ENABLED_NOTIFIERS", "macos,ios").strip()
+        enabled_channels = tuple(c for c in raw.split(",") if c.strip())
+        if not enabled_channels:
+            enabled_channels = ("macos", "ios")
+
     sent_channels: list[str] = []
 
     for channel in enabled_channels:
         if channel == "macos" and _send_macos_notification(normalized_title, normalized_message):
             sent_channels.append(channel)
         elif channel == "ios" and _send_ios_notification(
+            normalized_title,
+            normalized_message,
+            store=store,
+            url=url,
+        ):
+            sent_channels.append(channel)
+        elif channel == "windows" and _send_windows_notification(
+            normalized_title, normalized_message
+        ):
+            sent_channels.append(channel)
+        elif channel == "android" and _send_android_notification(
             normalized_title,
             normalized_message,
             store=store,
@@ -220,7 +298,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("-P", "--profile", dest="profile_name", default=None)
     parser.add_argument(
         "--channel",
-        choices=("all", "ios", "macos"),
+        choices=("all", "ios", "macos", "windows", "android"),
         default="all",
     )
     args = parser.parse_args(list(argv) if argv is not None else None)
