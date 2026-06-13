@@ -112,32 +112,44 @@ class ReservationWorkflow:
     def _verify_captcha_with_retry(
         self,
     ) -> Tuple[CaptchaData, CaptchaVerificationResult]:
-        """带重试的验证码获取与校验。"""
-        max_attempts = max(self.api_settings.retry_count, 1)
-        logger.info("正在进行验证码校验，请稍候... (最多 %d 次)", max_attempts)
-        last_exc: Optional[Exception] = None
+        """带重试的验证码获取与校验。
 
-        for attempt in range(max_attempts):
-            data: Optional[CaptchaData] = None
-            result: Optional[CaptchaVerificationResult] = None
+        两类失败分开计数：
+          - 本地拒识（verify 抛 CaptchaError，未提交）：立即重取验证码、无退避，
+            预算 captcha_refetch_count；这种失败不消耗服务端校验次数。
+          - 服务端拒绝（result.success 为 False，已提交点击）：退避后重试，
+            预算 retry_count；每次都消耗一次真实校验。
+        """
+        submit_budget = max(self.api_settings.retry_count, 1)
+        refetch_budget = max(self.api_settings.captcha_refetch_count, 1)
+        logger.info(
+            "正在进行验证码校验，请稍候... (提交重试 %d 次, 本地重取 %d 次)",
+            submit_budget,
+            refetch_budget,
+        )
+        last_exc: Optional[Exception] = None
+        submits = 0
+        refetches = 0
+
+        while submits < submit_budget and refetches < refetch_budget:
             try:
                 data = self.captcha_service.fetch_captcha()
                 time.sleep(random.uniform(self.delay_min, self.delay_max))
                 result = self.captcha_service.verify_captcha(data)
             except CaptchaError as e:
+                refetches += 1
                 last_exc = e
-                logger.warning("验证码校验失败 (%d/%d): %s", attempt + 1, max_attempts, e)
-                if attempt < max_attempts - 1:
-                    time.sleep(self.api_settings.retry_interval_sec)
+                logger.warning("本地拒识，重取验证码 (%d/%d): %s", refetches, refetch_budget, e)
                 continue
 
+            submits += 1
             if result.success:
-                logger.info("验证码校验通过 (%d/%d)", attempt + 1, max_attempts)
+                logger.info("验证码校验通过 (提交第 %d 次)", submits)
                 return data, result
 
             last_exc = CaptchaError(result.message or "验证码校验未通过")
-            logger.warning("验证码校验未通过 (%d/%d): %s", attempt + 1, max_attempts, result.message)
-            if attempt < max_attempts - 1:
+            logger.warning("验证码校验未通过 (%d/%d): %s", submits, submit_budget, result.message)
+            if submits < submit_budget:
                 time.sleep(self.api_settings.retry_interval_sec)
 
         raise last_exc or CaptchaError("验证码流程失败")

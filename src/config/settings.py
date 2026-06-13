@@ -24,9 +24,11 @@ class ApiSettings:
     # 验证码获取与校验之间的延迟区间（秒）
     captcha_delay_min: float = 1.0
     captcha_delay_max: float = 2.5
-    # 请求失败重试
+    # 请求失败重试（服务端拒绝后退避重试，会消耗真实校验次数）
     retry_count: int = 5
     retry_interval_sec: float = 2.0
+    # 本地拒识后立即重取验证码的上限（仅 captcha/get，不提交、无退避）
+    captcha_refetch_count: int = 12
 
 
 @dataclass
@@ -83,6 +85,7 @@ def load_settings(
         default_search_date=env.get_str("CGYY_DEFAULT_SEARCH_DATE", ApiSettings.default_search_date),
         aes_cbc_key=env.get_str("CGYY_AES_CBC_KEY", ApiSettings.aes_cbc_key),
         aes_cbc_iv=env.get_str("CGYY_AES_CBC_IV", ApiSettings.aes_cbc_iv),
+        captcha_refetch_count=env.get_int("CGYY_CAPTCHA_REFETCH_COUNT", ApiSettings.captcha_refetch_count),
     )
     user = UserSettings(
         profile_name=active_profile,

@@ -2,18 +2,24 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import random
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List
 
+from PIL import Image
+
 from src.api.captcha_api import CaptchaApi
+from src.captcha_recognition import CaptchaRecognizer
+from src.captcha_recognition.types import Box
 from src.core.exceptions import CaptchaError
 from src.parsers.captcha import (parse_captcha_response,
                                  parse_check_captcha_response)
-from src.utils.char_locator import CharLocator, draw_boxes_with_chars
 from src.utils.crypto_utils import AesEcbEncryptor
+
+logger = logging.getLogger(__name__)
 
 CAPTCHA_DIR = Path("CAPTCHA")
 CAPTCHA_W, CAPTCHA_H = 310, 155
@@ -43,6 +49,7 @@ class CaptchaVerificationResult:
 class CaptchaService:
     def __init__(self, api: CaptchaApi) -> None:
         self.api = api
+        self.recognizer = CaptchaRecognizer()
 
     def fetch_captcha(self) -> CaptchaData:
         resp = self.api.get_captcha_raw()
@@ -68,36 +75,27 @@ class CaptchaService:
         return image_path
 
     def locate_positions(self, captcha_data: CaptchaData) -> List[Dict[str, int]]:
-        locator = CharLocator()
-        target_chars = list(captcha_data.word_list)
-        if not target_chars:
+        word_list = list(captcha_data.word_list)
+        if not word_list:
             return []
-        result = locator.locate_multiple_chars(str(captcha_data.image_path), target_chars)
-        draw_boxes_with_chars(
-            str(captcha_data.image_path),
-            result["all_regions"],
-            result.get("target_bbox"),
-        )
-        if not result["success"] or result["found_count"] != len(target_chars):
-            raise CaptchaError("未能识别全部目标字符")
-        check_pos_arr: List[Dict[str, int]] = []
-        for fc in result["found_chars"]:
-            x1, y1, x2, y2 = fc["bbox"]
-            w, h = x2 - x1, y2 - y1
-            cx = (x1 + x2) / 2
-            cy = (y1 + y2) / 2
-            offset_x = random.uniform(-0.1 * w, 0.1 * w)
-            offset_y = random.uniform(-0.1 * h, 0.1 * h)
-            imgw, imgh = result["image_size"]["width"], result["image_size"]["height"]
-            sx = CAPTCHA_W * (cx + offset_x) / imgw
-            sy = CAPTCHA_H * (cy + offset_y) / imgh
-            check_pos_arr.append(
-                {
-                    "x": int(round(sx)),
-                    "y": int(round(sy)),
-                }
+        with Image.open(captcha_data.image_path) as img:
+            img_w, img_h = img.size
+        verdict = self.recognizer.verify(captcha_data.image_path.read_bytes(), word_list)
+        if not verdict.complete:
+            breakdown = ", ".join(
+                f"{c.word}={c.reason}({c.confidence:.2f})" for c in verdict.clicks
             )
-        return check_pos_arr
+            logger.warning("验证码本地拒识: %s", breakdown)
+            raise CaptchaError(f"未能识别全部目标字符 [{breakdown}]")
+        return [self._scale_click(c.box, img_w, img_h) for c in verdict.clicks]
+
+    def _scale_click(self, box: Box, img_w: int, img_h: int) -> Dict[str, int]:
+        cx = (box.x1 + box.x2) / 2 + random.uniform(-0.1 * box.width(), 0.1 * box.width())
+        cy = (box.y1 + box.y2) / 2 + random.uniform(-0.1 * box.height(), 0.1 * box.height())
+        return {
+            "x": int(round(CAPTCHA_W * cx / img_w)),
+            "y": int(round(CAPTCHA_H * cy / img_h)),
+        }
 
     def build_verification(
         self, captcha_data: CaptchaData, positions: List[Dict[str, int]]

@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Captcha Labeling Tool</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #1a1a2e; color: #e0e0e0; }
+  .container { max-width: 960px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 18px; margin-bottom: 12px; color: #7ec8e3; }
+
+  .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+  .toolbar button { padding: 6px 14px; border: 1px solid #444; border-radius: 4px; background: #2a2a3e; color: #e0e0e0; cursor: pointer; font-size: 13px; }
+  .toolbar button:hover { background: #3a3a5e; }
+  .toolbar button.primary { background: #2d6a4f; border-color: #40916c; }
+  .toolbar button.primary:hover { background: #40916c; }
+  .toolbar span { font-size: 13px; color: #aaa; }
+  #progress { margin-left: 8px; }
+
+  .main { display: flex; gap: 16px; }
+  .image-col { flex: 0 0 340px; }
+  .edit-col { flex: 1; }
+
+  .image-panel { position: relative; background: #0d0d1a; border-radius: 6px; overflow: hidden; margin-bottom: 8px; }
+  .image-panel img { display: block; width: 100%; }
+  .image-panel canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+
+  .card { background: #252540; border-radius: 6px; padding: 12px; margin-bottom: 10px; }
+  .card h3 { font-size: 14px; margin-bottom: 8px; color: #7ec8e3; }
+
+  .crop-strip { display: flex; gap: 8px; flex-wrap: wrap; }
+  .crop-item { text-align: center; cursor: pointer; padding: 4px; border-radius: 6px; border: 2px solid transparent; background: #1e1e32; min-width: 75px; }
+  .crop-item:hover { border-color: #555; }
+  .crop-item.active { border-color: #7ec8e3; background: #1e2840; }
+  .crop-item img { display: block; margin: 0 auto; height: 52px; image-rendering: pixelated; }
+  .crop-item .ocr-text { font-size: 13px; color: #f0a050; margin-top: 2px; }
+  .crop-item .idx { font-size: 10px; color: #666; }
+
+  .edit-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .edit-row label { font-size: 13px; color: #888; min-width: 30px; }
+  .edit-row input { width: 48px; padding: 6px 8px; font-size: 22px; text-align: center; border: 2px solid #555; border-radius: 4px; background: #12121e; color: #fff; font-family: inherit; }
+  .edit-row input:focus { outline: none; border-color: #7ec8e3; }
+  .edit-row input.changed { border-color: #50b070; }
+  .edit-row .ocr-hint { font-size: 12px; color: #888; }
+  .edit-row input.invalid { border-color: #e05050; background: #2e1010; opacity: 0.5; }
+  .edit-row .btn-inv { padding: 2px 8px; font-size: 11px; border-radius: 3px; border: 1px solid #e05050; background: transparent; color: #e05050; cursor: pointer; }
+  .edit-row .btn-inv.active { background: #e05050; color: #fff; }
+  .crop-item.invalid { opacity: 0.4; }
+  .crop-item.invalid::after { content: "✕"; position: absolute; top: 2px; right: 6px; color: #e05050; font-size: 14px; }
+
+  #status-msg { font-size: 13px; color: #50b070; min-height: 20px; margin-top: 6px; }
+
+  .shortcuts { font-size: 11px; color: #555; margin-top: 10px; line-height: 1.7; }
+  .shortcuts kbd { background: #333; padding: 1px 5px; border-radius: 3px; font-size: 11px; }
+
+  .btn-sm { padding: 3px 10px; font-size: 12px; border-radius: 3px; border: 1px solid #555; background: #2a2a3e; color: #ccc; cursor: pointer; }
+  .btn-sm:hover { background: #444; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Captcha OCR Labeling</h1>
+
+  <div class="toolbar">
+    <button id="btn-prev">◀ Prev</button>
+    <span id="pos-info">- / -</span>
+    <button id="btn-next" class="primary">Next ▶</button>
+    <span id="progress"></span>
+    <select id="filter-status" style="margin-left:12px;padding:4px 8px;background:#2a2a3e;color:#e0e0e0;border:1px solid #444;border-radius:4px;">
+      <option value="all">All</option>
+      <option value="pending">Pending</option>
+      <option value="labeled">Labeled</option>
+    </select>
+    <button id="btn-import" style="margin-left:auto;margin-right:4px">Import CSV</button>
+    <button id="btn-export">Export CSV</button>
+  </div>
+
+  <div class="main">
+    <div class="image-col">
+      <div class="image-panel" id="img-panel">
+        <div style="padding:40px;text-align:center;color:#666;">Loading...</div>
+      </div>
+      <div class="card">
+        <h3>Cropped Characters (click to select)</h3>
+        <div class="crop-strip" id="crop-strip"></div>
+      </div>
+    </div>
+    <div class="edit-col">
+      <div class="card">
+        <h3>Edit Labels</h3>
+        <div id="edit-rows"></div>
+        <button class="btn-sm" onclick="clearAll()">Clear All</button>
+      </div>
+      <div id="status-msg"></div>
+      <div class="shortcuts">
+        <kbd>Enter</kbd> Save & next (empty→OCR default) &nbsp;
+        <kbd>Shift+Enter</kbd> Prev &nbsp;
+        <kbd>1</kbd>-<kbd>9</kbd> Focus input &nbsp;
+        <kbd>Tab</kbd> Next input &nbsp;
+        <kbd>Esc</kbd> Clear input &nbsp;
+        <kbd>✕</kbd> Mark noise
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let images = [];
+let currentIdx = -1;
+let currentData = null;
+let dirty = false;
+
+async function init() {
+  const resp = await fetch("/api/images");
+  const data = await resp.json();
+  images = data.images;
+  if (images.length === 0) {
+    document.getElementById("img-panel").innerHTML = '<div style="padding:40px;text-align:center;color:#666;">No images found</div>';
+    return;
+  }
+  loadImage(0);
+}
+
+async function loadImage(idx) {
+  if (idx < 0 || idx >= images.length) return;
+  if (dirty) await saveCurrent(); // auto-save only if changed
+  currentIdx = idx;
+  dirty = false;
+  const name = images[idx].name;
+  const resp = await fetch(`/api/image/${name}`);
+  currentData = await resp.json();
+  renderAll();
+  updateNav();
+  document.getElementById("status-msg").textContent =
+    images[idx].status === "labeled" ? "✓ Labeled" : "";
+}
+
+function renderAll() {
+  renderImage();
+  renderCrops();
+  renderEditRows();
+}
+
+function renderImage() {
+  const panel = document.getElementById("img-panel");
+  const name = currentData.name;
+  panel.innerHTML = `
+    <img src="/api/image/${encodeURIComponent(name)}/view" id="captcha-img" alt="${name}">
+    <canvas id="box-canvas"></canvas>
+  `;
+  const img = document.getElementById("captcha-img");
+  const onLoad = () => {
+    const boxes = currentData.boxes || [];
+    const canvas = document.getElementById("box-canvas");
+    if (!canvas) return;
+    const rect = img.getBoundingClientRect();
+    const pw = panel.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+    canvas.style.width = rect.width + "px";
+    canvas.style.height = rect.height + "px";
+    const ctx = canvas.getContext("2d");
+    const sx = rect.width / 310, sy = rect.height / 155;
+    boxes.forEach((b, i) => {
+      const x = b.box[0] * sx, y = b.box[1] * sy;
+      const w = (b.box[2]-b.box[0]) * sx, h = (b.box[3]-b.box[1]) * sy;
+      ctx.strokeStyle = "#7ec8e3";
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(x, y, w, h);
+      ctx.fillStyle = "#7ec8e3";
+      ctx.font = "11px monospace";
+      ctx.fillText(`${i+1}`, x+3, y-5);
+    });
+  };
+  if (img.complete) onLoad(); else img.onload = onLoad;
+}
+
+function renderCrops() {
+  const el = document.getElementById("crop-strip");
+  const boxes = currentData.boxes || [];
+  const label = currentData.label;
+  const gt = label ? label.ground_truth || [] : [];
+  let html = "";
+  boxes.forEach((b, i) => {
+    const val = gt[i] || "";
+    const isInv = (gt[i] === '__INVALID__');
+    html += `<div class="crop-item${i === (window._selBox||0) ? ' active' : ''}${isInv ? ' invalid' : ''}"
+      onclick="focusInput(${i})" id="crop-${i}" style="position:relative">
+      <img src="${b.crop_b64}" alt="box${i}">
+      <div class="ocr-text">${esc(b.ocr_text) || '?'}</div>
+      <div class="idx">#${i+1} ${isInv ? 'INVALID' : (val ? '✓ '+esc(val) : '')}</div>
+    </div>`;
+  });
+  el.innerHTML = html;
+}
+
+function renderEditRows() {
+  const el = document.getElementById("edit-rows");
+  const boxes = currentData.boxes || [];
+  const label = currentData.label;
+  const gt = label ? label.ground_truth || [] : [];
+  let html = "";
+  boxes.forEach((b, i) => {
+    const val = gt[i] || "";
+    const isInv = (gt[i] === '__INVALID__');
+    const ocr = b.ocr_text || "?";
+    html += `<div class="edit-row">
+      <label>#${i+1}</label>
+      <input type="text" id="inp-${i}" maxlength="2"
+        value="${isInv ? '' : esc(val)}" placeholder="${esc(ocr)}"
+        autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+        onfocus="setSelBox(${i})"
+        oninput="onEdit(${i})"
+        onkeydown="onKey(${i}, event)"
+        class="${val && !isInv ? 'changed' : ''}${isInv ? ' invalid' : ''}"
+        ${isInv ? 'disabled' : ''}>
+      <span class="ocr-hint">OCR: ${esc(ocr)}</span>
+      <span class="conf">${b.ocr_confidence.toFixed(3)}</span>
+      <button class="btn-inv${(gt[i]==='__INVALID__') ? ' active' : ''}" id="inv-${i}"
+        onclick="toggleInvalid(${i})" title="Mark as noise/invalid">✕</button>
+    </div>`;
+  });
+  el.innerHTML = html;
+  window._selBox = window._selBox || 0;
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, m =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]);
+}
+
+function setSelBox(i) {
+  window._selBox = i;
+  document.querySelectorAll(".crop-item").forEach((el, j) => el.classList.toggle("active", j === i));
+}
+
+function focusInput(i) {
+  setSelBox(i);
+  const inp = document.getElementById(`inp-${i}`);
+  if (inp) inp.focus();
+}
+
+function onEdit(i) {
+  dirty = true;
+  const inp = document.getElementById(`inp-${i}`);
+  const btn = document.getElementById(`inv-${i}`);
+  const crop = document.getElementById(`crop-${i}`);
+  const isInv = btn && btn.classList.contains("active");
+  if (inp) {
+    inp.classList.toggle("changed", !!inp.value && !isInv);
+    inp.classList.toggle("invalid", isInv);
+  }
+  if (crop) {
+    const v = inp ? inp.value.trim() : "";
+    const boxes = currentData.boxes || [];
+    const ocrDefault = boxes[i] ? boxes[i].ocr_text : "";
+    crop.classList.toggle("invalid", isInv);
+    if (isInv) {
+      crop.querySelector(".idx").textContent = `#${i+1} INVALID`;
+    } else if (v) {
+      crop.querySelector(".idx").textContent = `#${i+1} ✓ ${esc(v)}`;
+    } else {
+      crop.querySelector(".idx").textContent = `#${i+1} (${esc(ocrDefault)})`;
+    }
+  }
+}
+
+function onKey(i, e) {
+  const n = currentData.boxes.length;
+  if (e.key === "Enter") { e.preventDefault(); dirty = true; saveAndNext(); }
+  else if (e.key === "Tab") { e.preventDefault(); focusInput((i+1) % n); }
+  else if (e.key === "Escape") { e.preventDefault(); const inp = document.getElementById(`inp-${i}`); if (inp) { inp.value = ""; onEdit(i); } }
+}
+
+function toggleInvalid(i) {
+  const inp = document.getElementById(`inp-${i}`);
+  const btn = document.getElementById(`inv-${i}`);
+  const isInv = btn.classList.contains("active");
+  if (isInv) {
+    btn.classList.remove("active");
+    inp.disabled = false;
+    inp.classList.remove("invalid");
+    inp.value = "";
+  } else {
+    btn.classList.add("active");
+    inp.disabled = true;
+    inp.classList.add("invalid");
+    inp.value = "";
+  }
+  onEdit(i);
+}
+
+function clearAll() {
+  const boxes = currentData.boxes || [];
+  for (let i = 0; i < boxes.length; i++) {
+    const inp = document.getElementById(`inp-${i}`);
+    const btn = document.getElementById(`inv-${i}`);
+    if (inp) { inp.value = ""; inp.classList.remove("changed"); }
+    if (btn) { btn.classList.remove("active"); inp.disabled = false; inp.classList.remove("invalid"); }
+  }
+  dirty = true;
+}
+
+function getCurrentGT() {
+  // Empty inputs take OCR default; __INVALID__ marks noise boxes
+  const boxes = currentData.boxes || [];
+  const gt = [];
+  for (let i = 0; i < boxes.length; i++) {
+    const btn = document.getElementById(`inv-${i}`);
+    if (btn && btn.classList.contains("active")) {
+      gt.push("__INVALID__");
+      continue;
+    }
+    const inp = document.getElementById(`inp-${i}`);
+    const val = inp ? inp.value.trim() : "";
+    gt.push(val || (boxes[i] ? boxes[i].ocr_text : ""));
+  }
+  return gt;
+}
+
+async function saveCurrent() {
+  // Always save — empty inputs take OCR defaults, so every Enter is meaningful
+  const gt = getCurrentGT();
+  await fetch(`/api/image/${encodeURIComponent(images[currentIdx].name)}/save`, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ ground_truth: gt, labeler: "manual" }),
+  });
+  images[currentIdx].status = "labeled";
+  dirty = false;
+}
+
+async function saveAndNext() {
+  await saveCurrent();
+  const filtered = getFiltered();
+  const pos = filtered.indexOf(images[currentIdx].name);
+  if (pos < filtered.length - 1) {
+    const nextIdx = images.findIndex(im => im.name === filtered[pos+1]);
+    loadImage(nextIdx);
+  } else {
+    document.getElementById("status-msg").textContent = "✓ All saved (end reached)";
+  }
+}
+
+function getFiltered() {
+  const f = document.getElementById("filter-status").value;
+  if (f === "all") return images.map(im => im.name);
+  return images.filter(im => im.status === f).map(im => im.name);
+}
+
+function updateNav() {
+  const filtered = getFiltered();
+  const pos = filtered.indexOf(images[currentIdx].name);
+  document.getElementById("pos-info").textContent = `${pos+1} / ${filtered.length}`;
+  document.getElementById("progress").textContent =
+    `(${images.filter(im=>im.status==='labeled').length}/${images.length} labeled)`;
+  document.getElementById("btn-prev").disabled = pos <= 0;
+  document.getElementById("btn-next").disabled = pos >= filtered.length - 1;
+}
+
+// Global keyboard
+document.addEventListener("keydown", async (e) => {
+  if (e.target.tagName === "INPUT") return;
+  const n = currentData ? currentData.boxes.length : 0;
+  if (e.key === "Enter") {
+    e.preventDefault();
+    if (e.shiftKey) {
+      const filtered = getFiltered();
+      const pos = filtered.indexOf(images[currentIdx].name);
+      if (pos > 0) {
+        await saveCurrent();
+        const prevIdx = images.findIndex(im => im.name === filtered[pos-1]);
+        loadImage(prevIdx);
+      }
+    } else { saveAndNext(); }
+  } else if (e.key >= "1" && e.key <= "9") {
+    const i = parseInt(e.key) - 1;
+    if (i < n) focusInput(i);
+  }
+});
+
+document.getElementById("btn-next").addEventListener("click", saveAndNext);
+document.getElementById("btn-prev").addEventListener("click", async () => {
+  await saveCurrent();
+  const filtered = getFiltered();
+  const pos = filtered.indexOf(images[currentIdx].name);
+  if (pos > 0) {
+    const prevIdx = images.findIndex(im => im.name === filtered[pos-1]);
+    loadImage(prevIdx);
+  }
+});
+document.getElementById("filter-status").addEventListener("change", () => {
+  const filtered = getFiltered();
+  if (filtered.length > 0) {
+    const nextIdx = images.findIndex(im => im.name === filtered[0]);
+    loadImage(nextIdx);
+  }
+});
+// ── Import CSV ──────────────────────────────────────────
+document.getElementById("btn-import").addEventListener("click", () => {
+  const inp = document.createElement("input");
+  inp.type = "file";
+  inp.accept = ".csv";
+  inp.onchange = async (ev) => {
+    const file = ev.target.files[0];
+    if (!file) return;
+    const text = await file.text();
+    const lines = text.trim().split("\n");
+    if (lines.length < 2) { alert("CSV is empty"); return; }
+    const header = lines[0].split(",");
+    const imgIdx = header.indexOf("image");
+    const charsIdx = header.indexOf("chars");
+    if (imgIdx < 0 || charsIdx < 0) { alert("CSV must have 'image' and 'chars' columns"); return; }
+    let imported = 0;
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(",");
+      const imgName = cols[imgIdx]?.trim();
+      const charsStr = cols[charsIdx]?.trim();
+      if (!imgName || !charsStr) continue;
+      const gt = charsStr.split(",").map(c => c.trim());
+      // Check if image exists in our list
+      const found = images.find(im => im.name === imgName);
+      if (!found) continue;
+      // Save via API
+      await fetch(`/api/image/${encodeURIComponent(imgName)}/save`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ ground_truth: gt, labeler: "imported" }),
+      });
+      found.status = "labeled";
+      imported++;
+    }
+    document.getElementById("status-msg").textContent = `✓ Imported ${imported} labels from CSV`;
+    // Reload current image to show imported labels
+    if (currentIdx >= 0) loadImage(currentIdx);
+    updateNav();
+  };
+  inp.click();
+});
+
+document.getElementById("btn-export").addEventListener("click", () => window.open("/api/export", "_blank"));
+
+init();
+</script>
+</body>
+</html>
