@@ -7,7 +7,7 @@ name = "buaa-cgyy"
 version = "3.1.0"
 description = "BUAA CGYY 场地预约"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.12"
 dependencies = [
     "requests>=2.28.0",
     "pycryptodome>=3.15.0",
