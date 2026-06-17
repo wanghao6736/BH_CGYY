@@ -37,7 +37,7 @@ class AuthProbeService:
                 retry_count=1,
                 retry_interval_sec=0.1,
             )
-            raw = CatalogApi(client=client).website_init()
+            raw = CatalogApi(client=client).website_probe()
             ok, msg = parse_success_message(raw)
             logger.info(f"认证探活结果 ok={ok} message={msg}")
             return ok

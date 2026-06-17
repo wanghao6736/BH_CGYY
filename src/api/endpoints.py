@@ -9,6 +9,7 @@ class CgyyEndpoints:
     CAPTCHA_CHECK = "/api/captcha/check"
 
     WEBSITE_INIT = "/api/front/website/init"
+    WEBSITE_PROBE = "/api/protocols/code/RESERVATION_PROTOCOL"
 
     RESERVATION_DAY_INFO = "/api/reservation/day/info"
     RESERVATION_SUBMIT = "/api/reservation/order/submit"
